@@ -53,8 +53,6 @@ struct rtk_recovery_layout {
 	const char *nand_dev;		/* whole device, used by a full restore */
 	const char *ubi_part;		/* the single UBI partition */
 	unsigned int ubi_mtd;		/* kernel mtd index of the UBI partition */
-	/* Command line fragment appended verbatim: the kernel partition table. */
-	const char *mtdparts;
 	size_t flash_size;
 
 	/* System slots. */

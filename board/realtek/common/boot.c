@@ -57,23 +57,12 @@ void rtk_board_preboot(void)
 }
 
 /* Kernel command line of a slot; the root volume id follows the slot. */
-/*
- * The kernel has no partitions of its own on this platform: the vendor device
- * trees describe the SPI NAND as a single node. The table therefore has to
- * travel in the command line, exactly as the stock firmware passed it.
- */
 static void rtk_bootargs(unsigned int root)
 {
 	const struct rtk_recovery_layout *l = rtk_recovery_layout();
-	char cmdline[256];
-	int len;
+	char cmdline[192];
 
-	len = snprintf(cmdline, sizeof(cmdline), l->bootargs, l->ubi_mtd, root);
-	if (len < 0 || (size_t)len >= sizeof(cmdline))
-		return;
-	if (l->mtdparts)
-		snprintf(cmdline + len, sizeof(cmdline) - len, " %s",
-			 l->mtdparts);
+	snprintf(cmdline, sizeof(cmdline), l->bootargs, l->ubi_mtd, root);
 	env_set("bootargs", cmdline);
 }
 
@@ -116,10 +105,25 @@ static int do_rtk_boot(struct cmd_tbl *cmdtp, int flag, int argc,
 U_BOOT_CMD(rtk_boot, 1, 0, do_rtk_boot,
 	   "boot the system in the selected UBI slot", "");
 
+/*
+ * The recovery service is a build option: a board that leaves CONFIG_CMD_HTTPD
+ * out still gets the command and the reset key, they just report that there is
+ * no service to start.
+ */
+static int rtk_start_recovery(void)
+{
+	if (!IS_ENABLED(CONFIG_CMD_HTTPD)) {
+		puts("This U-Boot was built without the HTTP recovery service.\n");
+		return -ENOSYS;
+	}
+
+	return uboot_httpd_start(env_get_yesno("httpd_dhcp") != 0);
+}
+
 static int do_rtk_recovery(struct cmd_tbl *cmdtp, int flag, int argc,
 			   char *const argv[])
 {
-	return uboot_httpd_start(env_get_yesno("httpd_dhcp") != 0);
+	return rtk_start_recovery();
 }
 
 U_BOOT_CMD(rtk_recovery, 1, 0, do_rtk_recovery,
@@ -145,7 +149,7 @@ static int rtk_board_recovery_spy(void)
 	/* On exit or a network error, stay at the prompt instead of booting. */
 	env_set("bootcmd", "");
 	puts("Reset held: starting the HTTP recovery\n");
-	ret = uboot_httpd_start(env_get_yesno("httpd_dhcp") != 0);
+	ret = rtk_start_recovery();
 	rtk_board_leds(RTK_LEDS_OFF);
 	if (ret)
 		printf("Recovery network failed (%d); use rtk_recovery to retry.\n",

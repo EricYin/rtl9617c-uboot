@@ -143,3 +143,7 @@ __pycache__
 
 # Clang's compilation database file
 /compile_commands.json
+
+# Local build outputs of build-bl33.sh (the script itself is tracked)
+/output/
+!/build-bl33.sh

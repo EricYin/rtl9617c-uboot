@@ -33,23 +33,15 @@ Three things make that a bad trade, and all three were found by reading the
 device, not by reasoning about the port.
 
 **The kernel has no partitions of its own.** The vendor device trees describe
-the SPI NAND as a bare ``spi-nand`` node with no ``partitions`` child, so the
-running kernel gets its table from the command line alone:
+the SPI NAND as a bare ``spi-nand`` node, so on a stock unit the whole table
+travels in the command line, and its numbering is load bearing: ``ubi.mtd=4``
+is ``ubi_device`` among the partitions, and the root volume is
+``ubi_mtd + 1 + volume id``.
 
-.. code-block:: none
-
-   console=ttyS0,115200 ubi.mtd=4 root=31:8 rootfstype=squashfs \
-   mtdparts=ca_spinand_flash:2048K(boot),256K@0x280000(env),256K@0x2C0000(env2),\
-   256K@0x300000(static_conf),251648K@0x340000(ubi_device)
-
-That numbering is the whole reason the offsets cannot move on their own:
-``ubi.mtd=4`` is the index of ``ubi_device`` among the partitions (boot is 0),
-and ``root=31:8`` is ``ubi_mtd + 1 + volume id``, where 3 is ``ubi_r0``. Shift
-one partition and the kernel attaches the wrong device, or none.
-
-So the boards pass that string verbatim. Each board stores it in its layout
-(``mtdparts``) and appends it to the command line it generates; the string is
-part of the product description, not of the boot policy.
+The port no longer passes that string - the boot path is its own - but the
+offsets are still the ones the stock firmware used, because they are what the
+existing flash content and BL2 assume, and because only ``boot`` is ever
+written.
 
 **UBI aligns on erase blocks, so a shifted start is worse than a wrong one.** A
 start at 0x240000 is exactly eight 128 KiB blocks below 0x340000. The PEB grid

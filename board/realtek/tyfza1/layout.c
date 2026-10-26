@@ -36,11 +36,6 @@ const struct rtk_recovery_layout *rtk_recovery_layout(void)
 
 		.bootargs = RTK_BOOTARGS,
 		.dt_compatible = "tianyi,tyfza1-recovery-layout",
-		/* The table the stock firmware passed; the kernel has none of its own. */
-		.mtdparts = "mtdparts=ca_spinand_flash:"
-			    "2048K(boot),256K@0x280000(env),256K@0x2C0000(env2),"
-			    "256K@0x300000(static_conf),251648K@0x340000(ubi_device)",
-
 		.volumes = tyfza1_volumes,
 		.nr_volumes = ARRAY_SIZE(tyfza1_volumes),
 		.keep_mask = (1U << 0) | (1U << 1) | (1U << 2) | (1U << 5),

@@ -91,6 +91,13 @@ after power-on is still caught just before ``bootcmd`` runs.
 Recovery
 --------
 
+.. note::
+
+   The image ships LZMA-compressed inside a self-decompressing BL33 stub
+   (``loader/``, built by ``./build-bl33.sh``): that is what makes this
+   ~70 KiB service fit the BL33 slot the stock firmware leaves (see
+   :doc:`boot-chain`). The service is enabled in the shipping configuration.
+
 The recovery environment is the HTTP service (``CONFIG_CMD_HTTPD``): a single
 page on 192.168.0.1 with a built-in DHCP server, supporting RAM uploads and
 downloads, command execution, whole-flash restore, kernel and boot-area
