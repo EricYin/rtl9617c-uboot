@@ -15,6 +15,7 @@ obj-$(CONFIG_BCMGENET) += bcmgenet.o
 obj-$(CONFIG_BNXT_ETH) += bnxt/
 obj-$(CONFIG_CALXEDA_XGMAC) += calxedaxgmac.o
 obj-$(CONFIG_CORTINA_NI_ENET) += cortina_ni.o
+obj-$(CONFIG_TAURUS_NI) += taurus_ni.o taurus_ni_taurus.o
 obj-$(CONFIG_DM_ETH_PHY) += eth-phy-uclass.o
 obj-$(CONFIG_DRIVER_DM9000) += dm9000x.o
 obj-$(CONFIG_DSA_SANDBOX) += dsa_sandbox.o

@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: GPL-2.0+
+#
+# Realtek RTL9617C (Cortina "Taurus") SoC
+
+config SOC_RTL9617C
+	bool
+	help
+	  Realtek RTL9617C, a 64-bit ARM SoC of the Cortina "Taurus" family.
+	  It provides the NI Ethernet MAC, a SPI NAND controller, a Cortina
+	  UART and the GPIO block used by the boards based on it.

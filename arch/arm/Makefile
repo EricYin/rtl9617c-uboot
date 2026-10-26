@@ -100,6 +100,7 @@ machine-$(CONFIG_ARCH_ZYNQMP)		+= zynqmp
 machine-$(CONFIG_ARCH_ZYNQMP_R5)	+= zynqmp-r5
 
 machine-$(CONFIG_MACH_IMX)		+= imx
+machine-$(CONFIG_SOC_RTL9617C)		+= taurus
 
 machdirs := $(patsubst %,arch/arm/mach-%/,$(machine-y))
 
