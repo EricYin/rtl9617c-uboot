@@ -1,0 +1,87 @@
+// SPDX-License-Identifier: GPL-2.0-only
+/dts-v1/;
+
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/input/input.h>
+#include "rtl9617c.dtsi"
+
+/ {
+	model = "Tianyi TYFZA1";
+	compatible = "tianyi,tyfza1", "realtek,rtl9617c";
+
+	aliases {
+		serial0 = &uart0;
+		ethernet0 = &eth;
+	};
+
+	chosen {
+		stdout-path = "serial0:115200n8";
+	};
+
+	buttons {
+		compatible = "gpio-keys";
+
+		reset {
+			label = "reset";
+			linux,code = <KEY_RESTART>;
+			gpios = <&gpio0 8 GPIO_ACTIVE_LOW>;
+		};
+	};
+
+	/* UBI volumes the factory and board trees live in; never rebuilt. */
+	recovery-layout {
+		compatible = "tianyi,tyfza1-recovery-layout";
+
+		factory {
+			volume-name = "ubi_Config";
+			volume-type = "dynamic";
+			volume-size = <0x60e000>;
+		};
+
+		fpga {
+			volume-name = "ubi_fpga";
+			volume-type = "dynamic";
+			volume-size = <0x41e000>;
+		};
+
+		dtb0 {
+			volume-name = "ubi_DTB0";
+			volume-type = "dynamic";
+			volume-size = <0x5d000>;
+		};
+
+		dtb1 {
+			volume-name = "ubi_DTB1";
+			volume-type = "dynamic";
+			volume-size = <0x5d000>;
+		};
+	};
+};
+
+/*
+ * Flash layout: the platform firmware, one environment block, and a single
+ * UBI device for everything else. The controller base is fixed in the
+ * driver, so the node carries no reg.
+ */
+&spi_nand {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		boot@0 {
+			label = "boot";
+			reg = <0x0 0x200000>;
+		};
+
+		env@200000 {
+			label = "env";
+			reg = <0x200000 0x40000>;
+		};
+
+		ubi_device@240000 {
+			label = "ubi_device";
+			reg = <0x240000 0xfdc0000>;
+		};
+	};
+};

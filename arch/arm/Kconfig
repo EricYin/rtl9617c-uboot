@@ -2187,6 +2187,26 @@ config TARGET_PRESIDIO_ASIC
 	select ARM64
 	select GICV2
 
+config TARGET_TYFZA1
+	bool "Tianyi TYFZA1 (RTL9617CVW)"
+	select ARM64
+	select DM
+	select OF_CONTROL
+	select BOARD_LATE_INIT
+	select EVENT
+	select SOC_RTL9617C
+	select RTK_RECOVERY
+
+config TARGET_PT1500
+	bool "Youhua PT1500-H10 (RTL9617C)"
+	select ARM64
+	select DM
+	select OF_CONTROL
+	select BOARD_LATE_INIT
+	select EVENT
+	select SOC_RTL9617C
+	select RTK_RECOVERY
+
 config TARGET_XENGUEST_ARM64
 	bool "Xen guest ARM64"
 	select ARM64
@@ -2467,6 +2487,12 @@ source "board/phytium/pe2201/Kconfig"
 source "board/xen/xenguest_arm64/Kconfig"
 
 source "arch/arm/mach-taurus/Kconfig"
+
+source "board/realtek/common/Kconfig"
+
+source "board/realtek/tyfza1/Kconfig"
+
+source "board/realtek/pt1500/Kconfig"
 
 source "arch/arm/Kconfig.debug"
 

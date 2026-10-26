@@ -2057,3 +2057,20 @@ T:	git https://source.denx.de/u-boot/u-boot.git
 F:	configs/tools-only_defconfig
 F:	*
 F:	*/
+
+REALTEK RTL9617C (TAURUS) PLATFORM
+M:	lyq1996 <lyq123233@163.com>
+S:	Maintained
+F:	arch/arm/mach-taurus/
+F:	arch/arm/include/asm/arch-taurus/
+F:	arch/arm/dts/rtl9617c*
+F:	board/realtek/
+F:	configs/tyfza1_defconfig
+F:	configs/pt1500_defconfig
+F:	drivers/mtd/nand/raw/cortina_spi_nand/
+F:	drivers/net/taurus_ni*
+F:	drivers/net/phy/rtl8221b*
+F:	include/rtk_recovery.h
+F:	include/taurus_ni.h
+F:	include/cortina_nand.h
+F:	include/rtk_board.h
