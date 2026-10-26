@@ -31,7 +31,7 @@ const struct rtk_recovery_layout *rtk_recovery_layout(void)
 		.boot_mtd = "boot",
 		.nand_dev = "nand0",
 		.ubi_part = "ubi_device",
-		.ubi_mtd = 2,
+		.ubi_mtd = 4,
 		.flash_size = 0x10000000,
 
 		.kernel_fmt = "ubi_k%d",
@@ -40,6 +40,10 @@ const struct rtk_recovery_layout *rtk_recovery_layout(void)
 
 		.bootargs = RTK_BOOTARGS,
 		.dt_compatible = "youhua,pt1500-recovery-layout",
+		/* The table the stock firmware passed; the kernel has none of its own. */
+		.mtdparts = "mtdparts=ca_spinand_flash:"
+			    "2048K(boot),256K@0x280000(env),256K@0x2C0000(env2),"
+			    "256K@0x300000(static_conf),251648K@0x340000(ubi_device)",
 
 		.volumes = pt1500_volumes,
 		.nr_volumes = ARRAY_SIZE(pt1500_volumes),

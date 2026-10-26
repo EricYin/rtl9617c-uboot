@@ -80,14 +80,24 @@ no ``mtdparts`` string is involved:
                            reg = <0x0 0x200000>;
                    };
 
-                   env@200000 {
+                   env@280000 {
                            label = "env";
-                           reg = <0x200000 0x40000>;
+                           reg = <0x280000 0x40000>;
                    };
 
-                   ubi_device@240000 {
+                   env2@2c0000 {
+                           label = "env2";
+                           reg = <0x2c0000 0x40000>;
+                   };
+
+                   static_conf@300000 {
+                           label = "static_conf";
+                           reg = <0x300000 0x40000>;
+                   };
+
+                   ubi_device@340000 {
                            label = "ubi_device";
-                           reg = <0x240000 0xfdc0000>;
+                           reg = <0x340000 0xf5c0000>;
                    };
            };
    };
@@ -95,6 +105,12 @@ no ``mtdparts`` string is involved:
 Validate it against the erase block size before trusting it: an offset that is
 not a multiple of 128 KiB cannot be erased on its own. See :doc:`partitions`
 for why the layout looks like this and what it must not be changed to.
+
+The kernel on this platform has no partitions of its own - the vendor device
+trees describe the SPI NAND as a bare node - so the board's layout also carries
+the ``mtdparts`` string that the command line has to contain, and the index the
+kernel will give ``ubi_device`` (``ubi_mtd``). Offsets, the command line table
+and ``ubi_mtd`` are one fact written three times; change them together.
 
 2. Kconfig entry
 ~~~~~~~~~~~~~~~~

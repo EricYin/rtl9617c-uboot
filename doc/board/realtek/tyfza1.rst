@@ -15,7 +15,9 @@ Hardware
 * 512 MiB DRAM
 * SPI NAND behind the Cortina SPI NAND controller
 * Cortina NI Ethernet MAC with four ports; on the ``2p5g`` board variant
-  port 4 is driven by an RTL8221B 2.5G PHY
+  port 4 is driven by an RTL8221B 2.5G PHY. U-Boot does not drive that PHY -
+  its driver is left out of the build to stay inside the BL33 budget, see
+  :doc:`boot-chain` - so recovery runs on the four GE ports
 * Cortina UART, 115200 8n1, 125 MHz input clock
 * Reset key on GPIO 8 plus front panel status LEDs
 
@@ -35,6 +37,13 @@ BL31 by the platform flashing tooling.
 
 Storage layout
 --------------
+
+.. note::
+
+   The offsets were verified against a full backup of a unit (SWVer V1.0.4):
+   ``/proc/mtd``, ``/proc/cmdline`` and the stored environment agree, and the
+   table is byte-identical to PT1500's. The 512 KiB at 0x200000 is a gap - the
+   vendor names no partition there, and neither does this port.
 
 The physical partitioning is the platform one; see :doc:`partitions`. This
 product's UBI volume table is:

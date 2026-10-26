@@ -18,7 +18,7 @@ static const struct rtk_ubi_volume tyfza1_volumes[] = {
 	{ "ubi_DTB0", 0x5d000 }, { "ubi_k0", 0x60e000 }, { "ubi_r0", 0x2017000 },
 	{ "ubi_DTB1", 0x5d000 }, { "ubi_k1", 0x60e000 }, { "ubi_r1", 0x2017000 },
 	{ "ubi_framework1", 0x101b000 }, { "ubi_framework2", 0x101b000 },
-	{ "ubi_apps", 0x6007000 }, { "rootfs_data", 0x1000000 },
+	{ "ubi_apps", 0x6007000 },
 };
 
 const struct rtk_recovery_layout *rtk_recovery_layout(void)
@@ -27,7 +27,7 @@ const struct rtk_recovery_layout *rtk_recovery_layout(void)
 		.boot_mtd = "boot",
 		.nand_dev = "nand0",
 		.ubi_part = "ubi_device",
-		.ubi_mtd = 2,
+		.ubi_mtd = 4,
 		.flash_size = 0x10000000,
 
 		.kernel_fmt = "ubi_k%d",
@@ -36,6 +36,10 @@ const struct rtk_recovery_layout *rtk_recovery_layout(void)
 
 		.bootargs = RTK_BOOTARGS,
 		.dt_compatible = "tianyi,tyfza1-recovery-layout",
+		/* The table the stock firmware passed; the kernel has none of its own. */
+		.mtdparts = "mtdparts=ca_spinand_flash:"
+			    "2048K(boot),256K@0x280000(env),256K@0x2C0000(env2),"
+			    "256K@0x300000(static_conf),251648K@0x340000(ubi_device)",
 
 		.volumes = tyfza1_volumes,
 		.nr_volumes = ARRAY_SIZE(tyfza1_volumes),

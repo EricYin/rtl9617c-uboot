@@ -57,12 +57,23 @@ void rtk_board_preboot(void)
 }
 
 /* Kernel command line of a slot; the root volume id follows the slot. */
+/*
+ * The kernel has no partitions of its own on this platform: the vendor device
+ * trees describe the SPI NAND as a single node. The table therefore has to
+ * travel in the command line, exactly as the stock firmware passed it.
+ */
 static void rtk_bootargs(unsigned int root)
 {
 	const struct rtk_recovery_layout *l = rtk_recovery_layout();
-	char cmdline[192];
+	char cmdline[256];
+	int len;
 
-	snprintf(cmdline, sizeof(cmdline), l->bootargs, root);
+	len = snprintf(cmdline, sizeof(cmdline), l->bootargs, l->ubi_mtd, root);
+	if (len < 0 || (size_t)len >= sizeof(cmdline))
+		return;
+	if (l->mtdparts)
+		snprintf(cmdline + len, sizeof(cmdline) - len, " %s",
+			 l->mtdparts);
 	env_set("bootargs", cmdline);
 }
 

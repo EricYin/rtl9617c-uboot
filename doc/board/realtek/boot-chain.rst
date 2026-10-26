@@ -88,3 +88,48 @@ longer refuses anything on its own.
 A consequence worth stating: the recovery service will now write a boot image
 that BL2 may reject. The structural check in ``rtk_validate_loader()`` catches a
 truncated or inconsistent image, not an unauthorised one.
+
+BL33 has a hard ceiling
+-----------------------
+
+The FIP slot is not defined by the partition alone. BL2 reads FIP0 at 0x40000
+and FIP1 at 0x100000, so each copy has to end before the next one starts: the
+slot is 0xC0000 bytes. Inside it the stock firmware puts BL2, BL31, BL33 and a
+six-entry certificate chain, packed with no gaps, so where BL33 may start is
+fixed by the size of the two stages in front of it.
+
+Measured from the stock images of both products:
+
+================== ============== ============= =============
+Board / variant    BL33 offset    Stock BL33    BL33 limit
+================== ============== ============= =============
+PT1500             0x3ECF8        459,961       529,160
+TYFZA1 2p5g        0x3EE58        467,222       528,808
+TYFZA1 4ge         0x3FD50        475,590       524,976
+================== ============== ============= =============
+
+The limit is what is left to 0xC0000 once the six certificate entries are
+dropped, and dropping them is a requirement, not a preference: keeping them caps
+BL33 at the stock size. It is also harmless here, because the root key is not
+fused and BL2 never evaluates the chain; what BL2 does need is the BL2, BL31 and
+BL33 entries, and those stay.
+
+One binary serves every variant, so the tightest row is the real budget:
+
+=========== =========== ============== ==========
+Board       Image       Budget         Headroom
+=========== =========== ============== ==========
+PT1500      520,544     529,160        8,616
+TYFZA1      522,968     524,976        2,008
+=========== =========== ============== ==========
+
+TYFZA1 only fits without the 2.5G PHY driver (``CONFIG_PHY_RTL8221B`` off,
+6,904 bytes): U-Boot then leaves port 4 alone and the recovery service runs on
+the four GE ports. The kernel drives that PHY itself, so nothing above U-Boot
+changes.
+
+The banner carries a build timestamp, so the exact size moves by a few
+dozen bytes between builds; treat these as the reference.
+
+Both margins are thin. Any feature added to a board has to be measured against
+this table rather than assumed to fit.

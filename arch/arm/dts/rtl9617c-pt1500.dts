@@ -68,14 +68,30 @@
 			reg = <0x0 0x200000>;
 		};
 
-		env@200000 {
+		/*
+		 * Everything from 0x200000 on is the vendor layout, untouched: the
+		 * kernel's device tree has no partitions of its own, so the table in
+		 * the command line and these offsets have to agree exactly.
+		 */
+		/* 0x200000-0x280000: unowned, as the vendor left it. */
+		env@280000 {
 			label = "env";
-			reg = <0x200000 0x40000>;
+			reg = <0x280000 0x40000>;
 		};
 
-		ubi_device@240000 {
+		env2@2c0000 {
+			label = "env2";
+			reg = <0x2c0000 0x40000>;
+		};
+
+		static_conf@300000 {
+			label = "static_conf";
+			reg = <0x300000 0x40000>;
+		};
+
+		ubi_device@340000 {
 			label = "ubi_device";
-			reg = <0x240000 0xfdc0000>;
+			reg = <0x340000 0xf5c0000>;
 		};
 	};
 };

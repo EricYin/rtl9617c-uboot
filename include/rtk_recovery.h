@@ -27,7 +27,7 @@
  * device and therefore major 31.
  */
 #define RTK_BOOTARGS \
-	"console=ttyS0,115200 ubi.mtd=ubi_device root=31:%u rootfstype=squashfs"
+	"console=ttyS0,115200 ubi.mtd=%u root=31:%u rootfstype=squashfs"
 
 struct rtk_payload {
 	const unsigned char *data;
@@ -52,7 +52,9 @@ struct rtk_recovery_layout {
 	const char *boot_mtd;		/* partition holding the firmware */
 	const char *nand_dev;		/* whole device, used by a full restore */
 	const char *ubi_part;		/* the single UBI partition */
-	unsigned int ubi_mtd;		/* its index, to derive volume devices */
+	unsigned int ubi_mtd;		/* kernel mtd index of the UBI partition */
+	/* Command line fragment appended verbatim: the kernel partition table. */
+	const char *mtdparts;
 	size_t flash_size;
 
 	/* System slots. */
