@@ -19,6 +19,17 @@
 
 DECLARE_GLOBAL_DATA_PTR;
 
+/*
+ * DRAM is trained by BL2, which publishes the population it brought up in
+ * TAURUS_BL2_DRAM_MB. Boards of this platform ship with DDR3L or DDR4 and in
+ * different densities, so the size is a run-time property: U-Boot only sizes
+ * its banks and its MMU map from it. Below the minimum the BL31 window would
+ * not fit; above the maximum the DRAM would run into the SoC's device space,
+ * which starts at 2 GiB.
+ */
+#define TAURUS_DRAM_MIN_MB	256U
+#define TAURUS_DRAM_MAX_MB	2048U
+
 static struct mm_region taurus_mem_map[] = {
 	{ .virt = 0, .phys = 0, .size = 0x20000000,
 	  .attrs = PTE_BLOCK_MEMTYPE(MT_NORMAL) | PTE_BLOCK_INNER_SHARE },
@@ -31,25 +42,47 @@ struct mm_region *mem_map = taurus_mem_map;
 
 static u32 original_xram[0x2000 / sizeof(u32)];
 
+/* A DDR3L or DDR4 population BL2 has brought up, a power of two of MiB. */
+static int taurus_dram_population_valid(u32 mb)
+{
+	return mb >= TAURUS_DRAM_MIN_MB && mb <= TAURUS_DRAM_MAX_MB &&
+	       !(mb & (mb - 1));
+}
+
 /*
- * Weak so a board with a different DRAM population can override them; the two
- * boards of this platform have 512 MiB and the same BL31 window.
+ * Weak so a board with a different DRAM population can override them; both
+ * boards of this platform accept whatever BL2 trained.
  */
 __weak int dram_init(void)
 {
-	if (taurus_dram_size_mb() != 512)
+	u32 mb = taurus_dram_size_mb();
+
+	if (!taurus_dram_population_valid(mb)) {
+		printf("DRAM: BL2 reports %u MiB, expected 256..2048 MiB\n", mb);
 		return -EINVAL;
-	gd->ram_size = 0x20000000;
+	}
+	gd->ram_size = (phys_size_t)mb << 20;
 
 	return 0;
 }
 
 __weak int dram_init_banksize(void)
 {
+	phys_addr_t size = gd->ram_size;
+
+	if (!size)
+		size = (phys_addr_t)taurus_dram_size_mb() << 20;
+	/* The BL31 window is a property of the platform firmware, not of the
+	 * board, so the banks are split around it at any population. */
 	gd->bd->bi_dram[0].start = 0;
-	gd->bd->bi_dram[0].size = TAURUS_SECURE_DRAM_START;
+	gd->bd->bi_dram[0].size = min_t(phys_addr_t, size,
+					TAURUS_SECURE_DRAM_START);
 	gd->bd->bi_dram[1].start = TAURUS_SECURE_DRAM_END;
-	gd->bd->bi_dram[1].size = 0x20000000 - TAURUS_SECURE_DRAM_END;
+	gd->bd->bi_dram[1].size = size > TAURUS_SECURE_DRAM_END ?
+				  size - TAURUS_SECURE_DRAM_END : 0;
+	/* One normal region for the whole population, as before; the banks keep
+	 * allocations out of the secure window. */
+	taurus_mem_map[0].size = size;
 
 	return 0;
 }
