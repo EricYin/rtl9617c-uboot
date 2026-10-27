@@ -1,28 +1,22 @@
 #!/bin/sh
 # SPDX-License-Identifier: GPL-2.0-only
 #
-# One-shot build of the flashable U-Boot for the RTL9617C boards.
+# Build the flashable BL33 stub for one board. The board id and the BL33
+# byte budget come from tools/release/boards/<board>.json.
 #
-#   ./build-bl33.sh pt1500|tyfza1|all
+#   build_bl33.sh <board>
 #
-# What it does, per board:
+# What it does:
 #   1. build U-Boot with the board defconfig (output/<board>/u-boot-dtb.bin)
 #   2. compress it with LZMA1 (alone format, dict 1 MiB, lc3/lp0/pb2)
-#   3. compile loader/ into the self-decompressing BL33 stub with the payload
-#      embedded, and emit output/<board>/bl33.bin
-#
-# output/<board>/bl33.bin is what goes into the FIP slot; the stock layout
-# gives BL33 459,961 bytes on PT1500 and 467,222 on the tighter TYFZA1
-# variant, and the stub is what makes a full-featured U-Boot fit there.
-# The plain u-boot-dtb.bin stays in the output directory for the RAM-boot
-# path (uboot-test-script/build-itb.sh, which is independent of this script;
-# point it here with --from output/<board> to reuse the build).
+#   3. compile loader/ into the self-decompressing BL33 stub with the
+#      payload embedded, and emit output/<board>/bl33.bin
 #
 # Requires: aarch64-linux-gnu- toolchain, xz, gzip, od, awk.
-
 set -eu
 
-REPO=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+REL=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+REPO=$(CDPATH= cd -- "$REL/../.." && pwd)
 cd "$REPO"
 CROSS_COMPILE=${CROSS_COMPILE:-aarch64-linux-gnu-}
 export CROSS_COMPILE
@@ -35,32 +29,28 @@ EXEC_ADDR=0x08000000		# stub self-relocates here, decodes from here
 RUN_ADDR=0x04000000		# CONFIG_TEXT_BASE of both boards
 STACK_TOP=0x01000000
 WINDOW=$((0x1000000))		# stub image + workspace must stay under 16 MiB
-BUDGET_PT1500=459961		# measured: BL33 payload start to the first certificate
-BUDGET_TYFZA1=466854		# measured on a real unit; the 2p5g variant governs
 
-die() { echo "build-bl33: $1" >&2; exit 1; }
+die() { echo "build_bl33: $1" >&2; exit 1; }
 
-budget_for() {
-	case "$1" in
-		pt1500) echo "$BUDGET_PT1500" ;;
-		tyfza1) echo "$BUDGET_TYFZA1" ;;
-	esac
+board_field() {
+	python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[sys.argv[2]])' \
+		"$REL/boards/$1.json" "$2"
 }
 
 build_board() {
 	board=$1
-	case "$board" in
-		pt1500) board_id="PT1500-H10" ;;
-		tyfza1) board_id="TYFZA1" ;;
-	esac
+	cfg=$REL/boards/$board.json
+	[ -f "$cfg" ] || die "no board config: $cfg"
+	defconfig=$(board_field "$board" defconfig)
+	board_id=$(board_field "$board" board_id)
+	budget=$(board_field "$board" bl33_budget)
 	out=output/$board
 	ldir=$out/loader
-	budget=$(budget_for "$board")
 	log=$REPO/$out/build.log
 
 	echo "==> $board: building U-Boot (log: $out/build.log)"
 	mkdir -p "$ldir"
-	make O="$out" "${board}_defconfig" >"$log" 2>&1
+	make O="$out" "$defconfig" >"$log" 2>&1
 	make O="$out" -j"$(nproc)" >>"$log" 2>&1
 	bin=$out/u-boot-dtb.bin
 	[ -f "$bin" ] || die "$bin not found - unexpected build output"
@@ -145,10 +135,7 @@ EOF
 }
 
 case "${1:-}" in
-pt1500 | tyfza1) build_board "$1" ;;
-all)
-	build_board pt1500
-	build_board tyfza1
-	;;
-*) die "usage: $0 pt1500|tyfza1|all" ;;
+*/*|*.json) die "usage: $0 <board>" ;;
+"") die "usage: $0 <board>" ;;
+*) build_board "$1" ;;
 esac

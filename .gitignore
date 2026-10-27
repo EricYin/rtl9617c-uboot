@@ -147,3 +147,9 @@ __pycache__
 # Local build outputs of build-bl33.sh (the script itself is tracked)
 /output/
 !/build-bl33.sh
+
+# Boot release packer
+!/build.sh
+/tools/release/tf-a/tools/cert_create/cert_create
+/tools/release/tf-a/tools/fiptool/fiptool
+!/tools/release/stocks/**/*.bin
