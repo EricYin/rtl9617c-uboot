@@ -3,8 +3,8 @@
  * PT1500 board description.
  *
  * One hardware build, so there is no variant strap: the four status lamps are
- * LED_EPHY0..3 of the OEM device tree (bank 3, bits 6, 7, 1 and 4, all active
- * high) and the reset key sits on bank 4 bit 8.
+ * LED_EPHY0..3 of the OEM device tree (bank 0, bits 4, 3, 1 and 0, all active
+ * low) and the reset key sits on bank 0 bit 8.
  */
 #include <config.h>
 #include <rtk_board.h>
@@ -13,8 +13,11 @@
 static const struct rtk_board_variant pt1500_variants[] = {
 	{
 		.lamp = {
-			{ .pin = 102 }, { .pin = 103 },
-			{ .pin = 97 }, { .pin = 100 },
+			{ .pin = 4, .active_low = true },
+			{ .pin = 3, .active_low = true },
+			{ .pin = 1, .active_low = true },
+			{ .pin = 0, .active_low = true },
+			{ .pin = 11, .active_low = false },	/* LED_PWR_G */
 		},
 		.ports = "4×GE",
 		.fit_config = "9617c",
@@ -26,7 +29,7 @@ static const struct rtk_board_desc pt1500_desc = {
 	.version = "2026.07",
 	.variants = pt1500_variants,
 	.nr_variants = ARRAY_SIZE(pt1500_variants),
-	.reset_pin = 136,
+	.reset_pin = 8,
 	.reset_active_low = true,
 };
 

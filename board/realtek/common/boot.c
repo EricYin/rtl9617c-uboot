@@ -22,7 +22,7 @@ static bool reset_latched;
 
 int rtk_board_env_init(void)
 {
-	env_set("bootcmd", "bootmenu 3");
+	env_set("bootcmd", "rtk_boot");
 	env_set("bootmenu_0", "Start OpenWrt=rtk_boot");
 	env_set("bootmenu_1", "Web recovery=rtk_recovery");
 	/*
@@ -141,11 +141,10 @@ static int rtk_board_recovery_spy(void)
 		puts("Reset released: normal boot\n");
 		return 0;
 	}
-	/* On exit or a network error, stay at the prompt instead of booting. */
-	env_set("bootcmd", "");
 	puts("Reset held: starting the HTTP recovery\n");
 	ret = rtk_start_recovery();
 	rtk_board_leds(RTK_LEDS_OFF);
+	env_set("bootcmd", "rtk_boot");
 	if (ret)
 		printf("Recovery network failed (%d); use rtk_recovery to retry.\n",
 		       ret);

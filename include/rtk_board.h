@@ -18,8 +18,8 @@ struct rtk_led {
 	bool active_low;
 };
 
-/* A lamp group is driven as a progress bar, so four is the useful size. */
-#define RTK_BOARD_LAMPS	4
+/* Four LAN lamps plus one power/status lamp. */
+#define RTK_BOARD_LAMPS	5
 
 /*
  * A hardware variant of one board. Boards with a single build pass NULL as the

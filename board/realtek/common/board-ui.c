@@ -14,6 +14,8 @@
 #include <cortina_nand.h>
 #include <rtk_board.h>
 #include <asm/arch/soc.h>
+#include <asm/arch/registers.h>
+#include <asm/io.h>
 #include <linux/delay.h>
 #include <linux/kernel.h>
 
@@ -53,6 +55,16 @@ const struct rtk_board_variant *rtk_board_variant(void)
  * off state, because the variant comes from the environment and may have been
  * corrected after the first call.
  */
+static void lamp_hw_release(void)
+{
+	writel(0, GLOBAL_LED_CONTROL);
+	writel(BIT(15), GLOBAL_LED_CONFIG_0);
+	writel(BIT(15), GLOBAL_LED_CONFIG_1);
+	writel(BIT(15), GLOBAL_LED_CONFIG_3);
+	writel(BIT(15), GLOBAL_LED_CONFIG_4);
+	writel(BIT(15), GLOBAL_LED_CONFIG_11);
+}
+
 static int lamp_select(void)
 {
 	const struct rtk_board_variant *variant = rtk_board_variant();
@@ -61,6 +73,7 @@ static int lamp_select(void)
 
 	if (!variant)
 		return -1;
+	lamp_hw_release();
 	for (i = 0; i < RTK_BOARD_LAMPS; i++) {
 		pins[i] = variant->lamp[i].pin;
 		lamp_inverted[i] = variant->lamp[i].active_low;
@@ -139,6 +152,7 @@ void rtk_board_boot_leds(void)
 		lamp_show(0);
 	}
 	lamp_release();
+	rtk_board_leds(RTK_LEDS_IDLE);
 }
 
 static u32 lamp_heartbeat(ulong t)
@@ -146,6 +160,14 @@ static u32 lamp_heartbeat(ulong t)
 	t %= 2000;
 
 	return t < 100 || (t >= 250 && t < 350) ? lamps.mask : 0;
+}
+
+/* Power lamp stays on; the four LAN lamps run a chase. */
+static u32 lamp_chase(ulong t)
+{
+	unsigned int step = (t / 200) % 4;
+
+	return lamp_bits[4] | lamp_bits[step];
 }
 
 /* Also called from NAND page loops, so a stalled write freezes the pattern. */
@@ -163,7 +185,7 @@ void rtk_board_leds_poll(void)
 		lit = lamps.mask;
 		break;
 	case RTK_LEDS_IDLE:
-		lit = lamp_heartbeat(t);
+		lit = lamp_chase(t);
 		break;
 	case RTK_LEDS_UPLOAD:
 		if (t / 50 % 2 == 0)
