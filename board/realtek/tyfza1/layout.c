@@ -2,23 +2,28 @@
 /*
  * TYFZA1 flash layout.
  *
- * The shared platform code (board/realtek/common) contains no volume name,
- * slot number or device tree string: everything product specific is here.
+ * The shared platform code (board/realtek/common) contains no volume name
+ * or device tree string: everything product specific is here.
  */
 #include <config.h>
 #include <linux/kernel.h>
 #include <rtk_recovery.h>
 
 /*
- * UBI volumes in volume-id order. The factory, FPGA and board tree volumes
- * (ids 0, 1, 2 and 5) are never removed by a rebuild.
+ * The system image is one firmware volume carrying the kernel and the root
+ * filesystem. A rebuild keeps both board data volumes - the factory
+ * calibration and identity source (ubi_Config), and the FPGA firmware
+ * (ubi_fpga) - byte for byte in place, drops every other volume, and
+ * re-creates the firmware volume over all the free space. The board data
+ * volumes keep the names the shipped firmware uses, and are never created
+ * empty here: a UBI volume reports its full size the moment it is created,
+ * so existence is the only honest signal that an image was imported, and
+ * the install refuses to run without one.
  */
 static const struct rtk_ubi_volume tyfza1_volumes[] = {
-	{ "ubi_Config", 0x60e000 }, { "ubi_fpga", 0x41e000 },
-	{ "ubi_DTB0", 0x5d000 }, { "ubi_k0", 0x60e000 }, { "ubi_r0", 0x2017000 },
-	{ "ubi_DTB1", 0x5d000 }, { "ubi_k1", 0x60e000 }, { "ubi_r1", 0x2017000 },
-	{ "ubi_framework1", 0x101b000 }, { "ubi_framework2", 0x101b000 },
-	{ "ubi_apps", 0x6007000 },
+	{ "ubi_Config", RTK_VOL_KEEP },
+	{ "ubi_fpga", RTK_VOL_KEEP },
+	{ "fip", RTK_VOL_FIRMWARE },
 };
 
 const struct rtk_recovery_layout *rtk_recovery_layout(void)
@@ -30,15 +35,13 @@ const struct rtk_recovery_layout *rtk_recovery_layout(void)
 		.ubi_mtd = 4,
 		.flash_size = 0x10000000,
 
-		.kernel_fmt = "ubi_k%d",
-		.root_index = { 4, 7 },
-		.kernel_size = 0x600000,
+		.firmware_volume = "fip",
+		.factory_volume = "ubi_Config",
 
 		.bootargs = RTK_BOOTARGS,
 		.dt_compatible = "tianyi,tyfza1-recovery-layout",
 		.volumes = tyfza1_volumes,
 		.nr_volumes = ARRAY_SIZE(tyfza1_volumes),
-		.keep_mask = (1U << 0) | (1U << 1) | (1U << 2) | (1U << 5),
 	};
 
 	return &layout;

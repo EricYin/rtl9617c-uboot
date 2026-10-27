@@ -53,7 +53,7 @@ struct httpd_board_ops {
 	/* Expected Flash bytes for the progress display, 0 when unknown. */
 	size_t (*job_write_size)(void);
 
-	/* Boot the uploaded FIT; the board knows its slots and boot script. */
+	/* Boot the uploaded FIT; the board knows its firmware volume and config. */
 	int (*boot_upload)(ulong addr, size_t size);
 
 	/* Product install jobs behind the standard endpoints. */

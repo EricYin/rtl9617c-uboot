@@ -56,40 +56,35 @@ void rtk_board_preboot(void)
 	taurus_xram_restore();
 }
 
-/* Kernel command line of a slot; the root volume id follows the slot. */
-static void rtk_bootargs(unsigned int root)
+/* Kernel command line; the image volume carries both kernel and root. */
+static void rtk_bootargs(void)
 {
 	const struct rtk_recovery_layout *l = rtk_recovery_layout();
 	char cmdline[192];
 
-	snprintf(cmdline, sizeof(cmdline), l->bootargs, l->ubi_mtd, root);
+	snprintf(cmdline, sizeof(cmdline), l->bootargs, l->ubi_mtd);
 	env_set("bootargs", cmdline);
 }
 
 /*
- * Read the kernel of the selected slot and start it. Shared by the boot
- * command and by the recovery service when it boots an uploaded image.
+ * Read the system image - kernel and root filesystem in one volume - and
+ * start it. Shared by the boot command and by the recovery service when it
+ * boots an uploaded image.
  */
-int rtk_boot_slot(void)
+int rtk_boot_system(void)
 {
 	const struct rtk_recovery_layout *l = rtk_recovery_layout();
 	const struct rtk_board_variant *variant = rtk_board_variant();
 	ulong address = env_get_ulong("unzip_src", 16, CONFIG_SYS_LOAD_ADDR);
-	int slot = env_get_ulong("slot", 10, 0);
-	char volume[16];
 
-	if (slot >= RTK_SLOTS)
-		return CMD_RET_FAILURE;
 	if (ubi_part((char *)l->ubi_part, NULL))
 		return CMD_RET_FAILURE;
-	snprintf(volume, sizeof(volume), l->kernel_fmt, slot);
-	if (run_commandf("ubi read 0x%lx %s 0x%zx", address, volume,
-			 l->kernel_size)) {
-		printf("Slot %d has no kernel in %s.\n", slot, volume);
+	if (run_commandf("ubi read 0x%lx %s", address, l->firmware_volume)) {
+		printf("No system image in %s.\n", l->firmware_volume);
 		return CMD_RET_FAILURE;
 	}
 	env_set_hex("unzip_src", address);
-	rtk_bootargs(l->ubi_mtd + 1 + l->root_index[slot]);
+	rtk_bootargs();
 	if (variant && variant->fit_config)
 		return run_commandf("bootm 0x%lx#%s", address, variant->fit_config);
 
@@ -99,11 +94,11 @@ int rtk_boot_slot(void)
 static int do_rtk_boot(struct cmd_tbl *cmdtp, int flag, int argc,
 		       char *const argv[])
 {
-	return rtk_boot_slot();
+	return rtk_boot_system();
 }
 
 U_BOOT_CMD(rtk_boot, 1, 0, do_rtk_boot,
-	   "boot the system in the selected UBI slot", "");
+	   "boot the system from the firmware volume", "");
 
 /*
  * The recovery service is a build option: a board that leaves CONFIG_CMD_HTTPD

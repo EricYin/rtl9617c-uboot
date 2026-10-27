@@ -3,7 +3,7 @@
  * Realtek Taurus platform: flash layout, boot and recovery.
  *
  * A board describes its flash once, in rtk_recovery_layout(); the shared code
- * here contains no volume name, slot number or device tree string.
+ * here contains no volume name or device tree string.
  */
 #ifndef __RTK_RECOVERY_H
 #define __RTK_RECOVERY_H
@@ -18,16 +18,12 @@
 #define RTK_FIP0_OFFSET		0x40000U
 #define RTK_FIP1_OFFSET		0x100000U
 
-/* System slots the boot code can switch between. */
-#define RTK_SLOTS		2
-
 /*
- * Kernel command line every board uses unless it has a reason not to. The
- * argument is the block device of the root filesystem, which is an MTD block
- * device and therefore major 31.
+ * Kernel command line every board uses unless it has a reason not to. Kernel
+ * and root filesystem ship in one image volume, so the kernel finds the root
+ * itself; only the UBI device is named here.
  */
-#define RTK_BOOTARGS \
-	"console=ttyS0,115200 ubi.mtd=%u root=31:%u rootfstype=squashfs"
+#define RTK_BOOTARGS 	"console=ttyS0,115200 ubi.mtd=%u rootfstype=squashfs"
 
 struct rtk_payload {
 	const unsigned char *data;
@@ -38,10 +34,25 @@ struct rtk_fip {
 	struct rtk_payload bl2, bl31, bl33;
 };
 
+/* What a rebuild does to one UBI volume of the table. */
+enum rtk_volume_policy {
+	/*
+	 * The system image: dropped on a rebuild and re-created as an empty
+	 * dynamic volume covering every free eraseblock.
+	 */
+	RTK_VOL_FIRMWARE,
+	/*
+	 * Board data, named exactly as the shipped firmware names it: a
+	 * rebuild leaves the volume byte for byte in place, and the volumes
+	 * that do not exist yet are created when their image is imported.
+	 */
+	RTK_VOL_KEEP,
+};
+
 /* One UBI volume of the rebuild table. */
 struct rtk_ubi_volume {
 	const char *name;
-	unsigned int size;	/* 0: as large as the device allows */
+	enum rtk_volume_policy policy;
 };
 
 /*
@@ -55,21 +66,20 @@ struct rtk_recovery_layout {
 	unsigned int ubi_mtd;		/* kernel mtd index of the UBI partition */
 	size_t flash_size;
 
-	/* System slots. */
-	const char *kernel_fmt;		/* printf pattern, argument is the slot */
-	unsigned int root_index[RTK_SLOTS];	/* UBI volume id per slot */
-	size_t kernel_size;		/* how much of a kernel volume to load */
+	/* The system image: kernel and root filesystem in a single volume. */
+	const char *firmware_volume;
+	/* The calibration and identity source; installed before a system. */
+	const char *factory_volume;
 
-	/* Kernel command line, %u replaced by the root block device. */
+	/* Kernel command line, %u replaced by the UBI device index. */
 	const char *bootargs;
 
-	/* Device tree node advertising the volumes a rebuild keeps. */
+	/* Device tree node advertising the board-data volumes. */
 	const char *dt_compatible;
 
 	/* UBI rebuild table. */
 	const struct rtk_ubi_volume *volumes;
 	unsigned int nr_volumes;
-	unsigned int keep_mask;
 };
 
 /* Provided by the board. */
@@ -83,10 +93,10 @@ int rtk_loader_preserves_device(const void *next, size_t next_size,
 
 /* boot.c - the one boot policy every board shares. */
 int rtk_board_env_init(void);
-int rtk_boot_slot(void);
+int rtk_boot_system(void);
 
 /* recovery.c - install engine. */
-int rtk_install_kernel(ulong address, size_t size, void (*poll)(void));
+int rtk_install_system(ulong address, size_t size, void (*poll)(void));
 int rtk_validate_loader(ulong address, size_t size);
 size_t rtk_loader_write_size(void);
 int rtk_install_loader(ulong address, size_t size, void (*poll)(void));

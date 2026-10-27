@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Recovery engine: install a kernel, replace the boot area, rebuild the UBI
- * volumes. Every product specific name comes from the layout.
+ * Recovery engine: install a system image, replace the boot area, rebuild the
+ * UBI volumes. Every product specific name comes from the layout.
  */
 #include <config.h>
 #include <command.h>
-#include <env.h>
 #include <image.h>
 #include <malloc.h>
 #include <memalign.h>
 #include <mapmem.h>
 #include <mtd.h>
 #include <stdio.h>
+#include <string.h>
 #include <ubi_uboot.h>
 #include <rtk_board.h>
 #include <rtk_recovery.h>
@@ -47,18 +47,26 @@ static int volume_verify(char *name, const void *data, size_t length,
 	return ret;
 }
 
-int rtk_install_kernel(ulong address, size_t size, void (*poll)(void))
+/* The pool ubi_volume_create() draws from; it checks the same counter. */
+static unsigned int free_pebs(void)
+{
+	return ubi_devices[0]->avail_pebs;
+}
+
+/*
+ * Install the system image into its own volume. The image is verified in RAM
+ * first, then staged in a second volume and read back, so the installed
+ * system only leaves Flash once the new image is proven good.
+ */
+int rtk_install_system(ulong address, size_t size, void (*poll)(void))
 {
 	const struct rtk_recovery_layout *l = layout();
 	const struct rtk_board_variant *variant = rtk_board_variant();
-	int slot = env_get_ulong("slot", 10, 0);
-	char volume[16];
-	size_t used, capacity;
+	char staging[24];
+	size_t used, reserved, needed;
 	int ret;
 
-	if (slot >= RTK_SLOTS || !size)
-		return -EINVAL;
-	if (fit_check_format((void *)address, size))
+	if (!size || fit_check_format((void *)address, size))
 		return -EINVAL;
 	/* Only an image carrying this product's configuration is bootable. */
 	if (variant && variant->fit_config &&
@@ -67,19 +75,52 @@ int rtk_install_kernel(ulong address, size_t size, void (*poll)(void))
 	ret = ubi_part((char *)l->ubi_part, NULL);
 	if (ret)
 		return ret;
-	snprintf(volume, sizeof(volume), l->kernel_fmt, slot);
-	ret = ubi_volume_get_size(volume, &used, &capacity);
+	if (!ubi_devices[0] || ubi_devices[0]->ro_mode)
+		return -EROFS;
+
+	/*
+	 * The factory image is the calibration and identity source: without
+	 * it a system has no MAC addresses or radio data to run with.
+	 */
+	if (ubi_volume_get_size(l->factory_volume, &used, &reserved) || !used) {
+		printf("The factory volume is empty or missing; import the factory image first.\n");
+		return -EINVAL;
+	}
+
+	snprintf(staging, sizeof(staging), "%s.new", l->firmware_volume);
+	if (ubi_volume_exists(staging) && ubi_volume_remove(staging))
+		return -EIO;
+	/*
+	 * The staged copy is as large as the image. Free the installed volume
+	 * only when the free pool cannot hold both, so the old system stays
+	 * bootable while the new one is written.
+	 */
+	needed = DIV_ROUND_UP(size, ubi_devices[0]->leb_size);
+	if (free_pebs() < needed && ubi_volume_exists(l->firmware_volume) &&
+	    ubi_volume_remove(l->firmware_volume))
+		return -EIO;
+	if (free_pebs() < needed)
+		return -ENOSPC;
+	ret = ubi_volume_create(staging, size, true);
 	if (ret)
 		return ret;
-	if (size > capacity)
-		return -EFBIG;
-	ret = ubi_volume_write(volume, (void *)address, 0, size);
+	ret = ubi_volume_write(staging, (void *)address, 0, size);
 	if (!ret)
-		ret = volume_verify(volume, (void *)address, size, poll);
-	if (ret)
+		ret = volume_verify(staging, (void *)address, size, poll);
+	if (ret) {
+		printf("Staged image failed (%d); retry, or rebuild the UBI volumes.\n",
+		       ret);
 		return ret;
-	printf("Kernel written to %s (%zu bytes), slot %d stays selected.\n",
-	       volume, size, slot);
+	}
+	if (ubi_volume_exists(l->firmware_volume) &&
+	    ubi_volume_remove(l->firmware_volume))
+		return -EIO;
+	ret = ubi_volume_rename(staging, l->firmware_volume);
+	if (ret) {
+		printf("The verified image stays in %s.\n", staging);
+		return ret;
+	}
+	printf("System written to %s (%zu bytes).\n", l->firmware_volume, size);
 
 	return 0;
 }
@@ -208,70 +249,130 @@ out:
 	return ret;
 }
 
+/* The rebuild table entry one volume name maps to, or NULL when unknown. */
+static const struct rtk_ubi_volume *layout_volume(
+	const struct rtk_recovery_layout *l, const char *name)
+{
+	unsigned int i;
+
+	for (i = 0; i < l->nr_volumes; i++)
+		if (!strcmp(l->volumes[i].name, name))
+			return &l->volumes[i];
+
+	return NULL;
+}
+
+/* Physically erase every good eraseblock of the UBI partition. */
+static int erase_ubi_mtd(const struct rtk_recovery_layout *l,
+			 void (*poll)(void))
+{
+	struct mtd_info *mtd;
+	u64 offset;
+	int ret;
+
+	mtd = get_mtd_device_nm(l->ubi_part);
+	if (IS_ERR(mtd))
+		return PTR_ERR(mtd);
+	if (!mtd_is_partition(mtd) || !mtd->erasesize ||
+	    mtd->size % mtd->erasesize) {
+		put_mtd_device(mtd);
+		return -EINVAL;
+	}
+	for (offset = 0; offset < mtd->size; offset += mtd->erasesize) {
+		struct erase_info erase = {
+			.mtd = mtd, .addr = offset, .len = mtd->erasesize
+		};
+
+		ret = mtd_block_isbad(mtd, offset);
+		if (ret) {
+			if (ret < 0) {
+				put_mtd_device(mtd);
+				return ret;
+			}
+			printf("Bad block at 0x%08llx stays out of UBI.\n",
+			       (unsigned long long)offset);
+			continue;
+		}
+		ret = mtd_erase(mtd, &erase);
+		if (ret) {
+			put_mtd_device(mtd);
+			return ret;
+		}
+		poll();
+	}
+	put_mtd_device(mtd);
+
+	return 0;
+}
+
+/*
+ * Rebuild the UBI layout. The volumes the table marks as board data survive
+ * byte for byte where they stand, everything else is erased, and the system
+ * volume is re-created over all the free space. A device UBI cannot attach
+ * falls back to a full erase, where nothing can be kept; the web flow asks
+ * for the factory image afterwards either way.
+ */
 int rtk_rebuild_ubi(void (*poll)(void))
 {
 	const struct rtk_recovery_layout *l = layout();
 	struct ubi_device *ubi;
-	struct ubi_volume *vol;
-	int available, needed = 0;
 	unsigned int i;
-	int ret = ubi_part((char *)l->ubi_part, NULL);
+	int ret;
 
-	if (ret)
-		return ret;
+	mtd_probe_devices();
+	if (ubi_devices[0]) {
+		/* Detach releases UBI's MTD reference before any erase. */
+		ret = ubi_detach();
+		if (ret)
+			return ret;
+	}
+
+	/* Attach first: what can be read is what can be kept. */
+	if (ubi_part((char *)l->ubi_part, NULL)) {
+		puts("UBI attach failed; erasing the device instead.\n");
+		ret = erase_ubi_mtd(l, poll);
+		if (ret)
+			return ret;
+		if (ubi_part((char *)l->ubi_part, NULL))
+			return -EIO;
+	}
 	ubi = ubi_devices[0];
-	if (!ubi || ubi->ro_mode)
-		return -EROFS;
-	available = ubi->avail_pebs;
-	if (ubi->beb_rsvd_level > ubi->beb_rsvd_pebs)
-		available -= ubi->beb_rsvd_level - ubi->beb_rsvd_pebs;
-	/* Keep the volumes holding device identity in Flash throughout. */
+
+	/* Drop the system volume and every volume the table does not know. */
 	for (i = 0; i < ubi->vtbl_slots; i++) {
-		vol = ubi->volumes[i];
-		if (!vol)
+		const struct rtk_ubi_volume *spec;
+		const char *name;
+
+		if (!ubi->volumes[i])
 			continue;
-		if (i >= l->nr_volumes || strcmp(vol->name, l->volumes[i].name)) {
-			puts("Unknown UBI volume layout; rebuild refused before removal.\n");
-			return -EINVAL;
-		}
-		if (!(l->keep_mask & (1U << i)))
-			available += vol->reserved_pebs;
-	}
-	for (i = 0; i < l->nr_volumes; i++) {
-		if (l->keep_mask & (1U << i)) {
-			vol = ubi->volumes[i];
-			if (!vol || vol->upd_marker || vol->corrupted)
-				return -EINVAL;
-		} else if (l->volumes[i].size) {
-			needed += DIV_ROUND_UP(l->volumes[i].size, ubi->leb_size);
-		}
-	}
-	if (needed > available)
-		return -ENOSPC;
-	/* A rebuilt device has no bootable slot until one is installed. */
-	ret = env_set("slot", NULL);
-	if (!ret)
-		ret = env_save();
-	if (ret)
-		return ret;
-	for (i = 0; i < l->nr_volumes; i++) {
-		if ((l->keep_mask & (1U << i)) || !ubi->volumes[i])
+		name = ubi->volumes[i]->name;
+		spec = layout_volume(l, name);
+		if (spec && spec->policy == RTK_VOL_KEEP)
 			continue;
-		ret = ubi_volume_remove((char *)l->volumes[i].name);
-		if (ret)
+		ret = ubi_volume_remove(name);
+		if (ret) {
+			printf("Removing %s failed (%d); kept volumes are untouched, retry the rebuild.\n",
+			       name, ret);
 			return ret;
+		}
 		poll();
 	}
+
+	/* The system volume takes every free eraseblock. */
 	for (i = 0; i < l->nr_volumes; i++) {
-		if (l->keep_mask & (1U << i))
+		const struct rtk_ubi_volume *spec = &l->volumes[i];
+
+		if (spec->policy != RTK_VOL_FIRMWARE)
 			continue;
-		ret = run_commandf("ubi create %s %x d %x", l->volumes[i].name,
-				   l->volumes[i].size, i);
-		if (ret)
+		ret = ubi_volume_create(spec->name, 0, true);
+		if (ret) {
+			printf("Creating %s failed (%d); kept volumes are intact, retry the rebuild.\n",
+			       spec->name, ret);
 			return ret;
+		}
 		poll();
 	}
-	puts("UBI system volumes rebuilt; the identity volumes stayed in Flash. Install a system before booting.\n");
+	puts("Board data kept in place; the system volume is empty, install a system.\n");
 
 	return 0;
 }

@@ -28,11 +28,15 @@
 		};
 	};
 
-	/* UBI volumes the factory and board trees live in; never rebuilt. */
+	/*
+	 * Volumes the web recovery lists as board data: a rebuild creates them
+	 * empty, then the user imports the factory image that carries the
+	 * calibration and identity data.
+	 */
 	recovery-layout {
 		compatible = "tianyi,tyfza1-recovery-layout";
 
-		factory {
+		config {
 			volume-name = "ubi_Config";
 			volume-type = "dynamic";
 			volume-size = <0x60e000>;
@@ -42,18 +46,6 @@
 			volume-name = "ubi_fpga";
 			volume-type = "dynamic";
 			volume-size = <0x41e000>;
-		};
-
-		dtb0 {
-			volume-name = "ubi_DTB0";
-			volume-type = "dynamic";
-			volume-size = <0x5d000>;
-		};
-
-		dtb1 {
-			volume-name = "ubi_DTB1";
-			volume-type = "dynamic";
-			volume-size = <0x5d000>;
 		};
 	};
 };

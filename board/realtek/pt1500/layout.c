@@ -4,25 +4,24 @@
  *
  * The physical partitioning is now the same on every board of this platform:
  * firmware, environment, one UBI device. What is left here is the volume table
- * of the product - no FPGA or data volume, and the configuration volumes at
- * the end.
+ * of the product - no FPGA volume, and the configuration volumes at the end.
  */
 #include <config.h>
 #include <linux/kernel.h>
 #include <rtk_recovery.h>
 
 /*
- * UBI volumes in volume-id order. The device identity and the two
- * configuration volumes are never removed by a rebuild.
+ * The system image is one firmware volume carrying the kernel and the root
+ * filesystem. A rebuild keeps the configuration volume byte for byte in
+ * place, drops every other volume, and re-creates the firmware volume over
+ * all the free space. Board data volumes are never created empty here: a
+ * UBI volume reports its full size the moment it is created, so existence
+ * created, so existence is the only honest signal that an image was
+ * imported, and the install refuses to run without one.
  */
 static const struct rtk_ubi_volume pt1500_volumes[] = {
-	{ "ubi_Config", 0x706000 },
-	{ "ubi_DTB0", 0x5d000 }, { "ubi_k0", 0x60e000 }, { "ubi_r0", 0x1e08000 },
-	{ "ubi_DTB1", 0x5d000 }, { "ubi_k1", 0x60e000 }, { "ubi_r1", 0x1e08000 },
-	{ "ubi_framework1", 0x101b000 }, { "ubi_framework2", 0x101b000 },
-	{ "ubi_otherConfig", 0x1113000 },
-	{ "ubi_apps", 0x611e000 },
-	{ "ubi_BakConfig", 0x307000 },
+	{ "ubi_Config", RTK_VOL_KEEP },
+	{ "fip", RTK_VOL_FIRMWARE },
 };
 
 const struct rtk_recovery_layout *rtk_recovery_layout(void)
@@ -34,15 +33,13 @@ const struct rtk_recovery_layout *rtk_recovery_layout(void)
 		.ubi_mtd = 4,
 		.flash_size = 0x10000000,
 
-		.kernel_fmt = "ubi_k%d",
-		.root_index = { 3, 6 },
-		.kernel_size = 0x600000,
+		.firmware_volume = "fip",
+		.factory_volume = "ubi_Config",
 
 		.bootargs = RTK_BOOTARGS,
 		.dt_compatible = "youhua,pt1500-recovery-layout",
 		.volumes = pt1500_volumes,
 		.nr_volumes = ARRAY_SIZE(pt1500_volumes),
-		.keep_mask = (1U << 0) | (1U << 9) | (1U << 11),
 	};
 
 	return &layout;

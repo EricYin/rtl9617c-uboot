@@ -218,7 +218,7 @@ const struct httpd_board_ops *httpd_board_ops(void)
 	ops.job_write_size = rtk_http_job_write_size;
 	ops.boot_upload = rtk_http_boot_upload;
 	ops.install_loader = rtk_http_install_loader;
-	ops.install_system = rtk_install_kernel;
+	ops.install_system = rtk_install_system;
 	ops.rebuild_ubi = rtk_rebuild_ubi;
 	ready = true;
 
