@@ -910,7 +910,7 @@ static int parse_task(void)
 	} else if (!strcmp(op, "flash-board-data")) {
 		if (json_text(&r, "target", target, sizeof(target)) ||
 		    board_data_find(target, &storage_request) ||
-		    buffer_size != storage_request.size)
+		    buffer_size > storage_request.size)
 			return -EINVAL;
 		job_kind = HTTP_JOB_BOARD_DATA;
 	} else if (!strcmp(op, "ubi-rebuild")) {
@@ -1487,7 +1487,7 @@ static int run_action(void)
 	ulong load_addr;
 
 	if (!strcmp(action_buf, "boot-production"))
-		return run_command("run boot_production", 0);
+		return run_command("rtk_boot", 0);
 
 	if (!strcmp(action_buf, "boot-upload")) {
 		load_addr = env_get_ulong("loadaddr", 16, CONFIG_SYS_LOAD_ADDR);

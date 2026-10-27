@@ -1,0 +1,714 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>恢复模式</title>
+<style>
+:root{color-scheme:light;
+--bg:#eef2f8;--panel:#fbfcff;--panel-2:#f4f7fb;--panel-strong:#fff;--panel-rgb:251,252,255;
+--text:#0f172a;--muted:#64748b;--border:rgba(15,23,42,.10);--border-strong:rgba(15,23,42,.16);
+--primary:#2563eb;--primary-2:#38bdf8;--primary-rgb:37,99,235;
+--danger-rgb:220,38,38;--success:#16a34a;
+--warn-bg:rgba(245,158,11,.10);--warn-border:rgba(245,158,11,.30);
+--err-bg:rgba(220,38,38,.08);--err-border:rgba(220,38,38,.30);
+--shadow-sm:0 1px 2px rgba(15,23,42,.05),0 1px 0 rgba(255,255,255,.8) inset;
+--shadow:0 1px 2px rgba(15,23,42,.04),0 8px 24px rgba(15,23,42,.06),0 24px 56px rgba(15,23,42,.08),0 1px 0 rgba(255,255,255,.85) inset;
+--focus-ring:0 0 0 2px var(--panel),0 0 0 4px rgba(var(--primary-rgb),.42);
+--inset-highlight:rgba(255,255,255,.72);
+--radius-sm:10px;--radius:14px;--radius-lg:20px;--card-w:780px;--sidebar-w:272px;
+--sp-xs:4px;--sp-sm:8px;--sp-md:14px;--sp-lg:24px;--sp-xl:36px;
+--ease-out:cubic-bezier(.16,1,.3,1);--anim-fast:160ms;--anim:240ms;
+--font-sans:system-ui,-apple-system,"Segoe UI",Roboto,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+--font-mono:ui-monospace,SFMono-Regular,"Cascadia Code",Menlo,Consolas,monospace}
+html[data-theme="dark"]{color-scheme:dark;
+--bg:#070b16;--panel:#0f172a;--panel-2:#131c30;--panel-strong:#1a2540;--panel-rgb:15,23,42;
+--text:#e6edf7;--muted:#94a3b8;--border:rgba(148,163,184,.14);--border-strong:rgba(148,163,184,.24);
+--primary:#60a5fa;--primary-2:#22d3ee;--primary-rgb:96,165,250;
+--danger-rgb:248,113,113;--success:#4ade80;
+--warn-bg:rgba(245,158,11,.08);--warn-border:rgba(245,158,11,.30);
+--err-bg:rgba(248,113,113,.08);--err-border:rgba(248,113,113,.30);
+--shadow-sm:0 1px 2px rgba(0,0,0,.3),0 1px 0 rgba(255,255,255,.04) inset;
+--shadow:0 1px 2px rgba(0,0,0,.2),0 10px 28px rgba(0,0,0,.3),0 28px 64px rgba(0,0,0,.38),0 1px 0 rgba(255,255,255,.05) inset;
+--inset-highlight:rgba(255,255,255,.05)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.55 var(--font-sans)}
+.app{display:grid;grid-template-columns:var(--sidebar-w) 1fr;min-height:100vh}
+.sidebar{position:sticky;top:0;height:100vh;padding:var(--sp-md) var(--sp-sm);border-right:1px solid var(--border);
+background:linear-gradient(180deg,rgba(var(--panel-rgb),.84) 0%,rgba(var(--panel-rgb),.72) 100%);
+box-shadow:var(--shadow-sm);display:flex;flex-direction:column;overflow:hidden;z-index:10}
+.sidebar-brand{display:flex;align-items:center;gap:10px;padding:9px 12px var(--sp-md);border-bottom:1px solid var(--border)}
+.sidebar-brand .logo{width:28px;height:28px;flex-shrink:0;color:var(--primary)}
+.sidebar-brand .title{font-weight:800;font-size:1.05rem;letter-spacing:-.01em;color:var(--text)}
+.sidebar-brand .title small{display:block;font-size:.68rem;font-weight:600;color:var(--muted);letter-spacing:.05em}
+.sidebar-controls{display:grid;gap:10px;padding:var(--sp-md) 10px}
+.control-row{display:grid;grid-template-columns:58px 1fr;align-items:center;gap:10px;color:var(--muted);font-size:.8rem;font-weight:600}
+.control-row select{width:100%;padding:8px 30px 8px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);
+background:var(--panel);color:var(--text);outline:none;font:inherit;font-size:.82rem;font-weight:500;cursor:pointer;appearance:none;
+background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);
+background-repeat:no-repeat;background-position:calc(100% - 15px) 52%,calc(100% - 10px) 52%;background-size:5px 5px}
+.nav{padding:6px 4px 0;flex:1;overflow-y:auto;scrollbar-width:thin}
+.nav-section{margin-top:var(--sp-md)}
+.nav-section-title{font-size:.7rem;text-transform:uppercase;letter-spacing:1.4px;color:var(--muted);padding:8px 12px 4px;opacity:.75}
+.nav-link{position:relative;display:flex;align-items:center;gap:10px;width:100%;padding:10px 14px;border-radius:var(--radius-sm);
+color:var(--muted);text-decoration:none;font:inherit;font-size:.9rem;font-weight:600;border:1px solid transparent;background:none;cursor:pointer;text-align:left;overflow:hidden;
+transition:background var(--anim-fast) var(--ease-out),border-color var(--anim-fast) var(--ease-out),color var(--anim-fast) var(--ease-out),transform var(--anim-fast) var(--ease-out)}
+.nav-link::before{content:"";position:absolute;left:0;top:50%;width:3px;height:0;background:linear-gradient(180deg,var(--primary),var(--primary-2));border-radius:0 3px 3px 0;transform:translateY(-50%);transition:height var(--anim) var(--ease-out)}
+.nav-link:hover{background:rgba(var(--primary-rgb),.07);border-color:rgba(var(--primary-rgb),.16);color:var(--text);transform:translateX(2px)}
+.nav-link:hover::before{height:16px}
+.nav-link.active{background:linear-gradient(90deg,rgba(var(--primary-rgb),.14),rgba(var(--primary-rgb),.04) 70%);border-color:rgba(var(--primary-rgb),.22);color:var(--text);box-shadow:0 1px 0 var(--inset-highlight) inset}
+.nav-link.active::before{height:60%}
+.nav-link .dot{width:7px;height:7px;border-radius:999px;background:var(--primary);box-shadow:0 0 0 3px rgba(var(--primary-rgb),.12);opacity:.52;flex-shrink:0;transition:opacity var(--anim-fast)}
+.nav-link.active .dot{opacity:1;box-shadow:0 0 0 4px rgba(var(--primary-rgb),.18)}
+.sidebar-foot{margin-top:auto;padding:10px 12px 4px;font-size:.72rem;color:var(--muted);overflow-wrap:anywhere}
+.main{padding:var(--sp-xl) var(--sp-lg) 150px;display:grid;gap:var(--sp-md);align-content:start}
+#m{position:relative;width:100%;max-width:var(--card-w);margin:0 auto;border:1px solid var(--border);
+background:linear-gradient(180deg,rgba(var(--panel-rgb),.92),rgba(var(--panel-rgb),.78)),var(--panel);
+border-radius:var(--radius-lg);box-shadow:var(--shadow);overflow:hidden;display:flex;flex-direction:column;min-height:clamp(360px,calc(100vh - 240px),440px)}
+#m::before{content:"";position:absolute;top:0;right:0;left:0;height:1px;background:linear-gradient(90deg,transparent,rgba(var(--primary-rgb),.55),rgba(var(--primary-rgb),.2) 60%,transparent);pointer-events:none}
+.card-head{padding:18px 22px 8px;position:relative;z-index:1}
+.card-main{flex:1;display:flex;flex-direction:column;gap:var(--sp-md);padding:var(--sp-md) 22px 18px;position:relative;z-index:1}
+.card-foot{margin-top:auto;padding:0 22px 22px;position:relative;z-index:1}
+.upload-hero{width:48px;height:48px;margin:2px auto 10px;border-radius:50%;display:grid;place-items:center;color:var(--primary);
+background:radial-gradient(circle at 50% 35%,rgba(var(--primary-rgb),.18),transparent 70%),linear-gradient(180deg,rgba(var(--primary-rgb),.1),rgba(var(--primary-rgb),.03));
+border:1px solid rgba(var(--primary-rgb),.22);box-shadow:0 0 0 4px rgba(var(--primary-rgb),.05),0 1px 0 var(--inset-highlight) inset}
+h1{font-weight:800;font-size:1.5rem;line-height:1.25;letter-spacing:-.02em;margin:10px 0 0;text-align:center;color:var(--text)}
+h1::after{content:"";display:block;width:64px;height:3px;margin:10px auto 0;border-radius:999px;background:linear-gradient(90deg,var(--primary),var(--primary-2));box-shadow:0 2px 8px rgba(var(--primary-rgb),.3)}
+#hint{color:var(--muted);font-size:.9rem;line-height:1.55;margin:10px 0 0;text-align:center}
+#hint strong{color:var(--text)}
+h3{font-size:.95rem;margin:0 0 6px;color:var(--text)}
+p{color:var(--muted);line-height:1.55;margin:0}
+.i{border-radius:var(--radius-sm);text-align:left;padding:var(--sp-md) 18px;line-height:1.55;box-shadow:0 1px 0 var(--inset-highlight) inset}
+.i.w{background:var(--warn-bg);border:1px solid var(--warn-border)}
+.i strong{display:block;margin:0 0 6px;color:var(--text)}
+.i ul{margin:0;padding-left:18px;color:var(--muted);font-size:.85rem}
+.i ul li{margin:2px 0}
+.sysinfo{padding:10px 14px;border-radius:var(--radius-sm);border:1px solid var(--border);
+background:linear-gradient(180deg,rgba(var(--primary-rgb),.05),transparent 60%),var(--panel-2);
+color:var(--muted);font-size:.78rem;line-height:1.5;text-align:left;overflow-wrap:anywhere;box-shadow:var(--shadow-sm)}
+.settings-page{display:grid;gap:var(--sp-md)}
+.settings-section{display:grid;gap:10px;padding:var(--sp-md);border:1px solid var(--border);background:var(--panel-2);border-radius:var(--radius);box-shadow:var(--shadow-sm)}
+.settings-heading{margin:0;font-size:.85rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.settings-help{margin:0;font-size:.78rem;color:var(--muted);line-height:1.5;text-align:left}
+.form-row{width:min(520px,100%);margin:6px auto 0;display:grid;gap:10px}
+.form-row-2{grid-template-columns:1fr 1fr}
+.field{display:grid;gap:5px;text-align:left}
+.field label{color:var(--muted);font-size:.78rem;font-weight:600}
+.field-control{width:100%;padding:9px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--panel-strong);color:var(--text);outline:none;font:inherit;font-size:.85rem}
+.field-control:focus{border-color:rgba(var(--primary-rgb),.55);box-shadow:var(--focus-ring)}
+.env-grid{display:grid;gap:8px}
+.env-row{display:grid;grid-template-columns:150px 1fr;gap:10px;align-items:center}
+.env-row code{font-family:var(--font-mono);font-size:.78rem;color:var(--muted);overflow-wrap:anywhere}
+.form-actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:8px}
+input[type="file"]{display:none}
+.file{position:relative;display:flex;align-items:center;gap:10px;width:min(520px,100%);margin:0 auto;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-strong);cursor:pointer;transition:border-color var(--anim-fast)}
+.file:hover{border-color:var(--border-strong)}
+.file b{font-weight:600;white-space:nowrap;padding:5px 12px;border:1px solid var(--border);border-radius:8px;font-size:.82rem;color:var(--text);background:var(--panel-2)}
+.file span{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.85rem}
+input[type="text"]{font:inherit;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-strong);color:var(--text);outline:none}
+input[type="text"]:focus{border-color:rgba(var(--primary-rgb),.55);box-shadow:var(--focus-ring)}
+button.button{appearance:none;position:relative;margin:6px 0;border:1px solid rgba(var(--primary-rgb),.4);
+background:linear-gradient(180deg,rgba(var(--primary-rgb),1) 0%,rgba(var(--primary-rgb),.82) 100%);
+color:#fff;border-radius:var(--radius);padding:10px 22px;font:inherit;font-size:.9rem;font-weight:700;cursor:pointer;letter-spacing:.01em;overflow:hidden;
+box-shadow:0 1px 0 rgba(255,255,255,.3) inset,0 -1px 0 rgba(0,0,0,.1) inset,0 4px 10px rgba(var(--primary-rgb),.2),0 12px 28px rgba(var(--primary-rgb),.18);
+transition:transform var(--anim-fast) var(--ease-out),filter var(--anim-fast),box-shadow var(--anim)}
+button.button:hover{filter:brightness(1.07);transform:translateY(-1px)}
+button.button.button-danger{border-color:rgba(220,38,38,.46);background:linear-gradient(180deg,rgba(239,68,68,.98) 0%,rgba(185,28,28,.86) 100%);box-shadow:0 1px 0 rgba(255,255,255,.26) inset,0 -1px 0 rgba(0,0,0,.12) inset,0 4px 12px rgba(var(--danger-rgb),.22),0 12px 28px rgba(var(--danger-rgb),.24)}
+button.button.plain{border-color:var(--border-strong);background:var(--panel-strong);color:var(--text);box-shadow:var(--shadow-sm)}
+button:disabled,input:disabled,select:disabled{opacity:.5;cursor:default;filter:none;transform:none}
+.bar{--percent:0;height:12px;width:min(520px,100%);background-color:rgba(100,116,139,.14);border:1px solid var(--border);border-radius:999px;margin:0 auto;overflow:hidden;position:relative;box-shadow:0 1px 2px rgba(15,23,42,.08) inset}
+.bar::before{content:"";display:block;width:calc(1% * var(--percent));height:100%;border-radius:999px;
+background:linear-gradient(180deg,rgba(255,255,255,.3),transparent 60%),linear-gradient(90deg,var(--primary),var(--primary-2));
+box-shadow:0 0 12px rgba(var(--primary-rgb),.35);transition:width var(--anim) var(--ease-out)}
+.bar-text{display:none;font-size:.82rem;font-weight:600;color:var(--primary);text-align:center;margin-top:4px;font-variant-numeric:tabular-nums}
+.confirm-box{width:min(520px,100%);margin:6px auto 0;padding:10px 14px;border-radius:var(--radius-sm);border:1px solid rgba(var(--primary-rgb),.3);
+background:linear-gradient(180deg,rgba(var(--primary-rgb),.06),transparent 60%),var(--panel-2);text-align:left;font-size:.82rem;color:var(--muted)}
+.confirm-box b{display:block;color:var(--text);overflow-wrap:anywhere;margin-bottom:2px}
+.confirm-box .form-actions{margin-top:8px}
+.console-card{width:min(560px,100%);margin:0 auto}
+.console-output{height:300px;overflow:auto;white-space:pre-wrap;word-break:break-word;font-family:var(--font-mono);font-size:.75rem;line-height:1.55;
+background:#0a0f1a;color:#d6deea;border:1px solid rgba(148,163,184,.18);border-radius:var(--radius-sm);padding:14px;text-align:left;scrollbar-width:thin}
+.console-toolbar{display:flex;gap:10px;align-items:center;margin-top:10px}
+.console-toolbar input{flex:1;min-width:0}
+.console-status{font-size:.8rem;color:var(--muted)}
+.table-wrap{width:100%;overflow-x:auto;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--panel-strong);box-shadow:var(--shadow-sm)}
+table{width:100%;border-collapse:collapse;font-size:.8rem}
+th,td{padding:7px 12px;text-align:left;border-bottom:1px solid var(--border)}
+th{color:var(--muted);font-weight:600;background:var(--panel-2)}
+tr:last-child td{border-bottom:0}
+td.num{font-variant-numeric:tabular-nums;text-align:right}
+.statusbar{position:fixed;bottom:0;left:var(--sidebar-w);right:0;background:linear-gradient(180deg,rgba(var(--panel-rgb),.94),rgba(var(--panel-rgb),.88));border-top:1px solid var(--border);
+backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);padding:10px var(--sp-lg) 12px;z-index:20}
+.statusbar .inner{width:100%;max-width:var(--card-w);margin:0 auto}
+.statusbar .top{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+#state{font-weight:700;font-size:.9rem}
+#transfer{color:var(--muted);font-variant-numeric:tabular-nums;font-size:.8rem}
+button.mini{border:1px solid var(--border-strong);border-radius:8px;background:var(--panel-strong);color:var(--text);font:inherit;font-size:.78rem;padding:5px 12px;cursor:pointer}
+#output{margin:6px 0 0;font-size:.78rem;color:rgb(var(--danger-rgb));white-space:pre-wrap;word-break:break-word;max-height:120px;overflow:auto;text-align:left;font-family:var(--font-sans)}
+[hidden]{display:none!important}
+@media(max-width:860px){
+.app{grid-template-columns:1fr}
+.sidebar{position:static;height:auto}
+.nav{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:4px;padding:6px 8px}
+.nav-section{margin-top:6px}
+.sidebar-foot{display:none}
+.main{padding:var(--sp-lg) 12px 200px}
+.statusbar{left:0}
+.form-row-2{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body><div class="app">
+<aside class="sidebar">
+<div class="sidebar-brand">
+<svg class="logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line><line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line><line x1="1" y1="9" x2="4" y2="9"></line><line x1="1" y1="15" x2="4" y2="15"></line><line x1="20" y1="9" x2="23" y2="9"></line><line x1="20" y1="15" x2="23" y2="15"></line></svg>
+<div class="title">恢复模式<small>U-Boot WEBUI</small></div>
+</div>
+<div class="sidebar-controls">
+<div class="control-row"><div>🌓 主题</div><select id="theme_select"><option value="auto">自动</option><option value="light">浅色</option><option value="dark">深色</option></select></div>
+</div>
+<nav class="nav" id="nav">
+<div class="nav-section">
+<div class="nav-section-title">基础功能</div>
+<button class="nav-link active" data-sec="firmware"><span class="dot"></span><span>固件升级</span></button>
+<button class="nav-link" data-sec="uboot"><span class="dot"></span><span>更新 U-Boot</span></button>
+</div>
+<div class="nav-section">
+<div class="nav-section-title">高级功能</div>
+<button class="nav-link" data-sec="ubi"><span class="dot"></span><span>UBI 管理</span></button>
+<button class="nav-link" data-sec="backup"><span class="dot"></span><span>分区备份</span></button>
+<button class="nav-link" data-sec="volumes"><span class="dot"></span><span>数据卷</span></button>
+<button class="nav-link" data-sec="flash"><span class="dot"></span><span>闪存管理</span></button>
+<button class="nav-link" data-sec="env"><span class="dot"></span><span>环境变量</span></button>
+<button class="nav-link" data-sec="console"><span class="dot"></span><span>网页终端</span></button>
+</div>
+<div class="nav-section">
+<div class="nav-section-title">系统</div>
+<button class="nav-link" data-sec="system"><span class="dot"></span><span>启动与重启</span></button>
+</div>
+</nav>
+<div class="sidebar-foot" id="sideVersion">—</div>
+</aside>
+<div class="main">
+<div id="m">
+
+<section id="sec-firmware">
+<div class="card-head">
+<div class="upload-hero"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"></rect><line x1="8" y1="4" x2="8" y2="1"></line><line x1="16" y1="4" x2="16" y2="1"></line><line x1="8" y1="20" x2="8" y2="23"></line><line x1="16" y1="20" x2="16" y2="23"></line><line x1="1" y1="8" x2="4" y2="8"></line><line x1="1" y1="16" x2="4" y2="16"></line><line x1="20" y1="8" x2="23" y2="8"></line><line x1="20" y1="16" x2="23" y2="16"></line></svg></div>
+<h1>固件升级</h1>
+<p id="hint">固件为单个 FIT 镜像（<strong>内核 + 根文件系统</strong>），将写入 UBI 的 <strong>fip</strong> 卷。<span id="fipInfo"></span></p>
+</div>
+<div class="card-main">
+<div class="sysinfo" id="deviceInfo">正在读取设备信息…</div>
+<div class="i w"><strong>首次安装</strong>
+<ul><li>重建 UBI（数据卷原位保留）→ 导入 fip 固件 → 回到这里刷写</li><li>ubi_Config 卷为空时无法安装固件</li></ul></div>
+<label class="file"><input id="firmwareFile" type="file" accept=".bin"><b>选择文件</b><span>未选择文件</span></label>
+</div>
+<div class="card-foot"><div class="i w"><strong>警告</strong>
+<ul><li>更新期间请勿断电</li><li>升级完成后设备将自动重启</li><li>请务必选择与本机匹配的固件镜像</li></ul></div></div>
+</section>
+
+<section id="sec-uboot" hidden>
+<div class="card-head">
+<div class="upload-hero"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><polyline points="9 12 11 14 15 10"></polyline></svg></div>
+<h1>更新 U-Boot</h1>
+<p id="hint">写入 boot 分区的<strong>双 FIP 副本</strong>（先写并校验 FIP1，再写 FIP0）。镜像必须保留本机的 <strong>GPT / BL2 / BL31</strong>。</p>
+</div>
+<div class="card-main">
+<div class="settings-page">
+<div class="settings-section">
+<h3 class="settings-heading">FIP 引导镜像</h3>
+<p class="settings-help">镜像为完整的 boot 区引导镜像（含 GPT / BL2 / BL31 与双 FIP），写入时先校验并写 FIP1，再写 FIP0。</p>
+<label class="file"><input id="ubootFile" type="file" accept=".img,.bin"><b>选择文件</b><span>未选择文件</span></label>
+</div>
+</div>
+</div>
+<div class="card-foot"><div class="i w"><strong>警告</strong>
+<ul><li>更新 U-Boot 属高危操作，可能损坏设备</li><li>请务必选择与本机匹配的引导镜像</li><li>更新期间请勿断电</li></ul></div></div>
+</section>
+
+<section id="sec-ubi" hidden>
+<div class="card-head">
+<div class="upload-hero"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2"></rect><path d="M7 2v20M17 2v20M2 12h20M2 7h20M2 17h20"></path></svg></div>
+<h1>UBI 管理</h1>
+<p id="hint">查看 UBI 卷布局，或重建整个 UBI 大分区（数据卷原位保留，其余空间全部分配给 <strong>fip</strong> 固件卷）。</p>
+</div>
+<div class="card-main">
+<div class="settings-page">
+<div class="settings-section">
+<h3 class="settings-heading">UBI 卷</h3>
+<div class="table-wrap" id="ubiTable"><div class="sysinfo">正在读取…</div></div>
+<div class="form-actions"><button id="ubiRefresh" class="button plain">刷新</button></div>
+</div>
+<div class="settings-section">
+<h3 class="settings-heading">重建 UBI</h3>
+<p class="settings-help">重建 UBI 时板级数据卷（ubi_Config、ubi_fpga 等）原位保留、数据不动，固件卷与其余卷被删除，剩余空间全部分配给新的空 fip 卷；安装固件前必须先导入 ubi_Config 镜像。若 UBI 已损坏无法识别，将改为整区擦除，此时数据卷无法保留。</p>
+<div class="form-actions"><button id="rebuildButton" class="button button-danger">重建 UBI</button></div>
+</div>
+</div>
+</div>
+<div class="card-foot"><div class="i w"><strong>警告</strong>
+<ul><li>数据卷（ubi_Config/ubi_fpga）原位保留，系统卷将被清空</li><li>若 UBI 无法识别将整区擦除，建议先在「分区备份」导出重要卷</li></ul></div></div>
+</section>
+
+<section id="sec-backup" hidden>
+<div class="card-head">
+<div class="upload-hero"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg></div>
+<h1>分区备份</h1>
+<p id="hint">导出 <strong>UBI 卷</strong>或 <strong>MTD 分区</strong>内容。备份 fip 卷即可导出当前整套固件。</p>
+</div>
+<div class="card-main">
+<div class="form-row">
+<div class="field"><label for="backupTarget">备份目标</label><select id="backupTarget" class="field-control"></select></div>
+<p class="settings-help" id="backupHint"></p>
+</div>
+<div class="form-actions"><button id="backupButton" class="button">下载备份</button></div>
+</div>
+<div class="card-foot"><div class="i w"><strong>说明</strong>
+<ul><li>MTD 备份为物理主数据，坏块填充 FF，不包含 OOB</li><li>整片备份可用于「闪存管理」的整片恢复</li></ul></div></div>
+</section>
+
+<section id="sec-volumes" hidden>
+<div class="card-head">
+<div class="upload-hero"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg></div>
+<h1>数据卷</h1>
+<p id="hint"><strong>ubi_Config</strong>（工厂校准与身份数据）与 <strong>ubi_fpga</strong>（FPGA 固件）等板级卷。重建 UBI 时这些卷原位保留；若卷不存在，在此导入镜像时自动创建。</p>
+</div>
+<div class="card-main">
+<div class="settings-page" id="boardDataList"><div class="sysinfo">正在读取…</div></div>
+</div>
+<div class="card-foot"><div class="i w"><strong>警告</strong>
+<ul><li>ubi_Config 镜像来自原厂同名卷的导出数据</li><li>写入错误的数据卷可能导致设备无法启动</li></ul></div></div>
+</section>
+
+<section id="sec-flash" hidden>
+<div class="card-head">
+<div class="upload-hero"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg></div>
+<h1>闪存管理</h1>
+<p id="hint">向任意分区写入镜像、从整片备份恢复，或清除坏块标记。</p>
+</div>
+<div class="card-main">
+<div class="settings-page">
+<div class="settings-section">
+<h3 class="settings-heading">写入分区</h3>
+<p class="settings-help">向任意 UBI 卷或 MTD 分区写入镜像，写入前无内容校验，请确认目标；MTD 分区写入要求镜像大小按擦除块（128 KiB）对齐。</p>
+<div class="form-row"><div class="field"><label for="writeTarget">目标</label><select id="writeTarget" class="field-control"></select></div></div>
+<label class="file"><input id="partitionFile" type="file" accept=".bin"><b>选择文件</b><span>未选择文件</span></label>
+</div>
+<div class="settings-section">
+<h3 class="settings-heading">整片恢复</h3>
+<p class="settings-help">从偏移 0 恢复完整主数据（含引导与板级数据），分段写入并校验。文件大小必须与 Flash 容量一致。</p>
+<label class="file"><input id="allFlashFile" type="file" accept=".bin"><b>选择文件</b><span>未选择文件</span></label>
+</div>
+<div class="settings-section">
+<h3 class="settings-heading">清除坏块标记</h3>
+<p class="settings-help">擦除整片 NAND（包括出厂坏块标记），所有数据将丢失。</p>
+<div class="form-actions"><button id="scrubButton" class="button button-danger">清除坏块标记</button></div>
+</div>
+</div>
+</div>
+<div class="card-foot"><div class="i w"><strong>警告</strong>
+<ul><li>写入与恢复操作直接修改 Flash 内容，请反复确认目标</li><li>整片恢复文件必须来自本机的完整备份</li></ul></div></div>
+</section>
+
+<section id="sec-env" hidden>
+<div class="card-head">
+<div class="upload-hero"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></div>
+<h1>环境变量</h1>
+<p id="hint">恢复网络使用 <strong>httpd_ipaddr / httpd_netmask</strong>（下次进入生效）；<strong>httpd_dhcp</strong> 设为 0 关闭 DHCP、设为 1 启用。</p>
+</div>
+<div class="card-main">
+<div class="settings-page">
+<div class="settings-section">
+<h3 class="settings-heading">恢复服务与网络</h3>
+<p class="settings-help">保存后立即写入 Flash，下次进入恢复模式生效；ipaddr / netmask 保存时自动映射为 httpd_ipaddr / httpd_netmask，值留空表示删除该变量。</p>
+<div class="env-grid" id="envGrid"></div>
+</div>
+<div class="settings-section">
+<h3 class="settings-heading">其他变量</h3>
+<div class="form-row form-row-2">
+<div class="field"><label for="envName">变量名</label><input id="envName" class="field-control" type="text" placeholder="例如 serverip" autocomplete="off" spellcheck="false"></div>
+<div class="field"><label for="envValue">值</label><input id="envValue" class="field-control" type="text" placeholder="留空表示删除" autocomplete="off" spellcheck="false"></div>
+</div>
+</div>
+</div>
+<div class="form-actions"><button id="envButton" class="button">保存修改</button></div>
+</div>
+<div class="card-foot"><div class="i w"><strong>说明</strong>
+<ul><li>bootcmd 由引导程序在每次开机时重设，在此修改无效</li><li>关闭 DHCP（httpd_dhcp=0）后需设置 httpd_ipaddr 才能访问本页面</li></ul></div></div>
+</section>
+
+<section id="sec-console" hidden>
+<div class="card-head">
+<div class="upload-hero"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg></div>
+<h1>网页终端</h1>
+<p id="hint">直接在浏览器中执行 <strong>U-Boot 命令</strong>（例如 mtd list、ubi info）。回显为命令结束后的输出。</p>
+</div>
+<div class="card-main">
+<div class="console-card">
+<div class="console-output" id="consoleLog"></div>
+<div class="console-toolbar">
+<input id="command" class="field-control" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="输入命令，例如 mtd list">
+<button id="commandButton" class="button">执行</button>
+</div>
+<div class="console-toolbar">
+<span class="console-status">此终端可执行任意 U-Boot 命令，请勿暴露在不可信网络中。</span>
+<button id="consoleClear" class="button plain">清空</button>
+<button data-action="exit" class="button plain">返回串口</button>
+</div>
+</div>
+</div>
+<div class="card-foot"><div class="i w"><strong>警告</strong>
+<ul><li>此终端拥有 root 级权限，可执行任意命令</li><li>请勿在不可信网络中使用</li></ul></div></div>
+</section>
+
+<section id="sec-system" hidden>
+<div class="card-head">
+<div class="upload-hero"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" y1="2" x2="12" y2="12"></line></svg></div>
+<h1>启动与重启</h1>
+<p id="hint">从 fip 卷启动系统、从内存试跑镜像，或重启设备。</p>
+</div>
+<div class="card-main">
+<div class="settings-page">
+<div class="settings-section">
+<h3 class="settings-heading">启动系统</h3>
+<p class="settings-help">从 UBI 的 fip 卷读取固件并启动 OpenWrt。</p>
+<div class="form-actions"><button data-action="boot-production" class="button">启动系统</button></div>
+</div>
+<div class="settings-section">
+<h3 class="settings-heading">内存启动</h3>
+<p class="settings-help">上传 FIT 镜像直接从内存启动，不写入 Flash。</p>
+<label class="file"><input id="initramfsFile" type="file" accept=".bin"><b>选择文件</b><span>未选择文件</span></label>
+</div>
+<div class="settings-section">
+<h3 class="settings-heading">重启设备</h3>
+<p class="settings-help">重启后按住 reset 键可再次进入恢复模式。</p>
+<div class="form-actions"><button data-action="reset" class="button plain">重启</button></div>
+</div>
+</div>
+</div>
+<div class="card-foot"><div class="i w"><strong>说明</strong>
+<ul><li>内存启动适合验证新固件，不改动 Flash</li><li>启动系统后本页面将不可用</li></ul></div></div>
+</section>
+
+</div>
+</div>
+<div class="statusbar"><div class="inner">
+<div class="top"><span id="state">—</span><span id="transfer"></span><button id="cancel" class="mini" hidden>取消传输</button></div>
+<div class="bar" id="progressBar" style="display:none"></div>
+<span class="bar-text" id="barText"></span>
+<pre id="output" hidden></pre>
+</div></div>
+</div>
+<script>
+'use strict';
+const PHASE={idle:'就绪',upload:'上传中',download:'下载中',queued:'等待执行',working:'正在处理',done:'完成',error:'操作失败',erase:'擦除中',create:'创建卷',ready:'上传完成','backup-ready':'备份已就绪',verify:'校验中',write:'写入中'};
+const VOL_DESC={'ubi_Config':'工厂校准与身份数据','ubi_fpga':'FPGA 固件'};
+let localBusy=false, remoteBusy=true, activeXHR=null, targets=[], flashBytes=0, rebooting=false;
+let activeRestore=0,serverRestore=0,cancelRestore=false;
+const el=id=>document.getElementById(id), text=(id,value)=>{el(id).textContent=value};
+function bytes(n){return n>=1048576?(n/1048576).toFixed(1)+' MiB':n>=1024?(n/1024).toFixed(1)+' KiB':n+' B'}
+/* ── 主题 ── */
+function applyTheme(v){
+ const dark=v==='auto'?matchMedia('(prefers-color-scheme: dark)').matches:v==='dark';
+ document.documentElement.dataset.theme=dark?'dark':'light';
+ localStorage.setItem('rtk_theme',v);
+}
+el('theme_select').onchange=e=>applyTheme(e.target.value);
+el('theme_select').value=localStorage.getItem('rtk_theme')||'auto';
+applyTheme(el('theme_select').value);
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{if((localStorage.getItem('rtk_theme')||'auto')==='auto')applyTheme('auto')});
+/* ── 导航与状态 ── */
+function controls(){
+ document.querySelectorAll('.card-main button,.card-main input,.card-main select').forEach(e=>{e.disabled=localBusy||remoteBusy||Boolean(serverRestore&&!activeRestore)});
+ el('cancel').disabled=false;el('cancel').hidden=!activeXHR&&!serverRestore&&!activeRestore;
+}
+function sec(name){
+ document.querySelectorAll('#nav .nav-link').forEach(b=>b.classList.toggle('active',b.dataset.sec===name));
+ document.querySelectorAll('#m>section').forEach(s=>{s.hidden=s.id!=='sec-'+name});
+}
+function hint(){
+ const v=targets[Number(el('backupTarget').value)];
+ text('backupHint',!v?'':v.whole?'整片 Flash 的完整镜像，可用于整片恢复。':
+  v.name==='fip'?'fip 卷即当前整套固件（kernel + rootfs FIT），备份后可用于重新刷写。':
+  v.kind==='mtd'?'MTD 备份为物理主数据，坏块填充 FF；NAND OOB 不包含在文件中。':'UBI 卷数据。');
+}
+function ubiTable(){
+ const wrap=el('ubiTable');const rows=targets.filter(v=>v.kind==='ubi');
+ if(!rows.length){wrap.innerHTML='<div class="sysinfo">未检测到 UBI 卷（可能尚未 attach）。</div>';return}
+ let html='<table><tr><th>卷名</th><th style="text-align:right">大小</th></tr>';
+ for(const v of rows)html+='<tr><td>'+v.name+'</td><td class="num">'+bytes(v.size)+'</td></tr>';
+ wrap.innerHTML=html+'</table>';
+}
+function catalog(){
+ for(const id of ['backupTarget','writeTarget']){
+  const previous=el(id).value;el(id).replaceChildren();
+  targets.forEach((v,i)=>{
+   if(id==='writeTarget'&&(v.whole||(v.kind==='mtd'&&v.name==='boot')))return;
+   const option=document.createElement('option');option.value=String(i);
+   option.textContent=(v.whole?'整片 Flash':v.name)+' · '+(v.kind==='ubi'?'UBI':'MTD')+' · '+bytes(v.size);
+   el(id).appendChild(option);
+  });
+  if([...el(id).options].some(o=>o.value===previous))el(id).value=previous;
+ }
+ hint();ubiTable();
+}
+function filePicker(input){
+ const label=document.createElement('label'),button=document.createElement('b'),name=document.createElement('span');
+ label.className='file';button.textContent='选择文件';name.textContent='未选择文件';
+ input.onchange=()=>{const file=input.files[0];name.textContent=file?file.name:'未选择文件'};
+ input.replaceWith(label);label.append(input,button,name);return label;
+}
+/* ── 两步上传确认（先上传 → 确认写入） ──
+ * 在文件选择框后面挂「上传」按钮和确认框；opts.check 时第一步只校验不预上传。
+ * 返回 {go, take}：go 是确认按钮；take() 取回 upload_id（仅可取一次）。 */
+function mountFlow(input,goLabel,opts){
+ opts=opts||{};
+ const host=input.closest('.file').parentElement;
+ const uploadBtn=document.createElement('div');uploadBtn.className='form-actions';
+ const up=document.createElement('button');up.className='button';up.textContent=opts.check?'校验文件':'上传';uploadBtn.append(up);
+ const box=document.createElement('div');box.className='confirm-box';box.hidden=true;
+ const name=document.createElement('b');const size=document.createElement('span');
+ const actions=document.createElement('div');actions.className='form-actions';
+ const go=document.createElement('button');go.className='button button-danger';go.textContent=goLabel;
+ actions.append(go);box.append(name,size,actions);
+ host.append(uploadBtn,box);
+ let pendingId=null;
+ input.addEventListener('change',()=>{pendingId=null;box.hidden=true});
+ up.onclick=()=>run(async()=>{
+  const file=input.files[0];if(!file)throw new Error('请选择文件');
+  if(opts.check)opts.validate(file);
+  else pendingId=await uploadFile(input);
+  name.textContent='文件：'+file.name;
+  size.textContent='大小：'+bytes(file.size);
+  box.hidden=false;
+ });
+ return {go,input,take:()=>{const id=pendingId;pendingId=null;box.hidden=true;if(!id)throw new Error('请先上传文件');return id}};
+}
+function boardData(items){
+ const list=el('boardDataList');list.replaceChildren();
+ for(const item of items){
+  const section=document.createElement('div');section.className='settings-section';
+  const heading=document.createElement('h3');heading.className='settings-heading';heading.textContent=item.target;
+  const meta=document.createElement('p');meta.className='settings-help';
+  meta.textContent=(VOL_DESC[item.target]?VOL_DESC[item.target]+' · ':'')+(item.kind==='ubi'?'UBI 卷':'MTD 分区')+' · 卷大小 '+bytes(item.size)+' · 镜像不得超过该大小';
+  const input=document.createElement('input');input.type='file';input.accept='.bin';
+  section.append(heading,meta,input);filePicker(input);
+  const flow=mountFlow(input,'写入 '+item.target,{validate:file=>{
+   if(file.size>item.size)throw new Error('镜像（'+bytes(file.size)+'）大于卷大小 '+bytes(item.size)+'，请确认导出的数据卷镜像');
+  }});
+  flow.go.onclick=()=>run(async()=>{await task({operation:'flash-board-data',target:item.target,upload_id:flow.take()})});
+  list.append(section);
+ }
+}
+/* ── 后端协议（沿用已验证实现） ── */
+async function request(url,options){
+ const r=await fetch(url,{cache:'no-store',...options});
+ const value=await r.json();
+ if(!r.ok)throw new Error(r.status===409?'设备正在处理其他操作':value.error||'请求失败');
+ return value;
+}
+async function refresh(){
+ const [d,s]=await Promise.all([request('/api/device'),request('/api/storage')]);targets=s.targets||[];
+ text('deviceInfo','机型：'+d.model+(d.ports?'（'+d.ports+'）':'')+' · RAM / Flash：'+bytes(d.ram_bytes)+' / '+bytes(d.flash_bytes));
+ text('sideVersion',(d.project_version||d.version||'—')+(d.build_commit?' · '+d.build_commit:''));
+ flashBytes=d.flash_bytes;
+ const fip=targets.find(v=>v.kind==='ubi'&&v.name==='fip');
+ text('fipInfo',fip?'当前 fip 卷：'+bytes(fip.size)+'。':'');
+ boardData(d.board_data||[]);
+ catalog();
+}
+function status(s){
+ remoteBusy=s.busy;serverRestore=s.restore_active?s.restore_id:0;
+ text('state',PHASE[s.phase]||s.phase||'—');text('output',s.output||'');
+ el('output').hidden=!s.output;controls();
+}
+async function waitTask(id){
+ let misses=0;
+ for(;;){
+  await new Promise(resolve=>setTimeout(resolve,700));
+  let s;
+  try{s=await request('/api/task');misses=0}catch(e){text('state','等待设备响应');if(rebooting&&++misses>=3)return {};continue}
+  if(s.id!==id)throw new Error('设备任务已变化，请刷新页面');
+  status(s);
+  if(s.state==='done'){if(s.code)throw new Error(s.output||'操作失败');return s}
+ }
+}
+async function task(payload){
+ const s=await request('/api/task',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+ return waitTask(s.id);
+}
+function transfer(url,body,responseType,progressBase=0,progressTotal=0){
+ return new Promise((resolve,reject)=>{
+  const xhr=new XMLHttpRequest();activeXHR=xhr;controls();
+  const started=performance.now();
+  el('progressBar').style.display='block';
+  const setBar=(loaded,total)=>{
+   el('progressBar').style.setProperty('--percent',total?100*loaded/total:0);
+   text('barText',total?Math.floor(100*loaded/total)+'%':'');
+  };
+  setBar(progressBase,progressTotal);
+  xhr.open(body?'POST':'GET',url);xhr.responseType=responseType;
+  const onprogress=e=>{
+   const loaded=progressBase+e.loaded;const total=progressTotal||(e.lengthComputable?e.total:0);const seconds=Math.max(.01,(performance.now()-started)/1000);
+   setBar(loaded,total);
+   text('transfer',bytes(loaded)+(total?' / '+bytes(total):'')+' · '+bytes(e.loaded/seconds)+'/s');
+  };
+  (body?xhr.upload:xhr).onprogress=onprogress;
+  xhr.onload=()=>{activeXHR=null;controls();if(xhr.status!==200){reject(new Error(xhr.status===409?'设备正在处理其他操作':'请求失败'));return}resolve(xhr.response)};
+  xhr.onerror=()=>{activeXHR=null;controls();reject(new Error('连接中断，请检查设备状态'))};
+  xhr.onabort=()=>{activeXHR=null;controls();reject(new Error('传输已取消'))};
+  xhr.send(body||null);
+ });
+}
+function endTransfer(){el('progressBar').style.display='none';text('barText','');text('transfer','')}
+async function run(fn){
+ if(localBusy||remoteBusy)return;
+ localBusy=true;rebooting=false;text('output','');el('output').hidden=true;endTransfer();controls();
+ try{await fn();if(!rebooting){text('state','完成');await refresh()}}
+ catch(e){rebooting=false;text('state','操作失败');text('output',e.message);el('output').hidden=false}
+ finally{
+  localBusy=false;endTransfer();
+  try{const s=await request('/api/task');remoteBusy=s.busy;serverRestore=s.restore_active?s.restore_id:0}catch(e){remoteBusy=true}
+  controls();
+ }
+}
+async function uploadFile(input,url='/api/upload'){
+ const file=input.files[0];if(!file)throw new Error('请选择文件');
+ text('state','上传中');
+ const s=await transfer(url,file,'json');
+ return s.upload_id;
+}
+function consoleLog(line){
+ const log=el('consoleLog');log.textContent+=line;log.scrollTop=log.scrollHeight;
+}
+/* ── 事件绑定 ── */
+document.querySelectorAll('#nav .nav-link').forEach(b=>b.onclick=()=>sec(b.dataset.sec));
+el('cancel').onclick=()=>{
+ if(activeXHR){activeXHR.abort();return}
+ if(localBusy&&(activeRestore||serverRestore)){cancelRestore=true;return}
+ if(serverRestore)run(()=>task({operation:'restore-cancel',restore_id:serverRestore}));
+};
+el('backupTarget').onchange=hint;
+el('ubiRefresh').onclick=()=>run(()=>refresh());
+const fw=mountFlow(el('firmwareFile'),'写入 fip 卷');
+fw.go.onclick=()=>run(async()=>{await task({operation:'flash',upload_id:fw.take()})});
+const ub=mountFlow(el('ubootFile'),'写入 U-Boot');
+ub.go.onclick=()=>run(async()=>{await task({operation:'flash-uboot',upload_id:ub.take()})});
+const wr=mountFlow(el('partitionFile'),'写入目标分区');
+wr.go.onclick=()=>run(async()=>{
+ const v=targets[Number(el('writeTarget').value)];if(!v)throw new Error('请选择目标分区');
+ await task({operation:'write',kind:v.kind,target:v.name,upload_id:wr.take()});
+});
+const im=mountFlow(el('initramfsFile'),'从内存启动');
+im.go.onclick=()=>run(async()=>{const id=im.take();rebooting=true;await task({operation:'boot-upload',upload_id:id})});
+const af=mountFlow(el('allFlashFile'),'恢复整片 Flash',{check:true,validate:file=>{
+ if(file.size!==flashBytes)throw new Error('请选择与 Flash 容量相同的完整主数据备份（'+bytes(flashBytes)+'）');
+}});
+af.go.onclick=()=>run(async()=>{
+ const file=af.input.files[0];if(!file)throw new Error('请选择文件');
+ cancelRestore=false;
+ let restore=0;
+ try{
+  const header=await transfer('/api/upload',file.slice(0,2*1024*1024),'json',0,file.size);
+  const started=await task({operation:'restore-start',total:file.size,upload_id:header.upload_id});
+  restore=started.restore_id;if(!restore)throw new Error('请求失败');
+  activeRestore=restore;
+  const segment=4*1024*1024;
+  for(let offset=started.restore_offset;offset<file.size;offset+=segment){
+   if(cancelRestore)throw new Error('传输已取消');
+   const upload=await transfer('/api/upload',file.slice(offset,offset+segment),'json',offset,file.size);
+   await task({operation:'restore-chunk',restore_id:restore,offset,upload_id:upload.upload_id});
+  }
+  if(cancelRestore)throw new Error('传输已取消');
+  await task({operation:'restore-finish',restore_id:restore});activeRestore=0;
+ }finally{
+  if(activeRestore){try{await task({operation:'restore-cancel',restore_id:activeRestore})}catch(e){}}
+  activeRestore=0;cancelRestore=false;
+ }
+});
+el('rebuildButton').onclick=()=>run(async()=>{
+ if(!confirm('重建将保留 ubi_Config 与 ubi_fpga 数据卷（原位不动），删除系统卷并重建为空 fip；完成后需先导入 ubi_Config 镜像再安装固件。确定继续？'))return;
+ await task({operation:'ubi-rebuild'});
+});
+el('backupButton').onclick=()=>run(async()=>{
+ const v=targets[Number(el('backupTarget').value)];if(!v)throw new Error('请选择备份目标');
+ const s=await task({operation:'backup',kind:v.kind,target:v.name});
+ if(!s.download_size)throw new Error('目标没有可备份的数据（卷为空）');
+ text('state','下载中');
+ const parts=[];const total=s.download_size;const segment=4*1024*1024;
+ for(let offset=0;offset<total;offset+=segment){
+  const length=Math.min(segment,total-offset);
+  parts.push(await transfer('/api/download/'+s.download_id+'/'+offset+'/'+length,null,'blob',offset,total));
+ }
+ const blob=new Blob(parts,{type:'application/octet-stream'});
+ const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=v.name+(v.kind==='mtd'?'-main':'')+'.bin';
+ a.click();setTimeout(()=>URL.revokeObjectURL(a.href),10000);
+});
+let envSaved={};
+async function envGrid(){
+ try{envSaved=await request('/api/env')}catch(e){envSaved={}}
+ const grid=el('envGrid');grid.replaceChildren();
+ for(const key of Object.keys(envSaved)){
+  const row=document.createElement('div');row.className='env-row';
+  const label=document.createElement('code');label.textContent=key;
+  const input=document.createElement('input');input.className='field-control';input.type='text';
+  input.value=envSaved[key]||'';input.dataset.key=key;input.autocomplete='off';input.spellcheck=false;
+  row.append(label,input);grid.append(row);
+ }
+}
+el('envButton').onclick=()=>run(async()=>{
+ let changed=0;
+ for(const input of el('envGrid').querySelectorAll('input')){
+  const key=input.dataset.key;
+  if((input.value||'')===(envSaved[key]||''))continue;
+  await task({operation:'env-set',name:key,value:input.value});changed++;
+ }
+ const name=el('envName').value.trim();
+ if(name){
+  await task({operation:'env-set',name,value:el('envValue').value});changed++;
+  el('envName').value='';el('envValue').value='';
+ }
+ if(!changed)throw new Error('没有需要保存的修改');
+ await envGrid();
+});
+el('commandButton').onclick=()=>run(async()=>{
+ const cmd=el('command').value.trim();if(!cmd)throw new Error('请输入命令');
+ const s=await task({operation:'command',command:cmd});
+ consoleLog('> '+cmd+'\n'+((s.output||'').trim()||'(无输出)')+'\n\n');
+ el('command').select();
+});
+el('command').onkeydown=e=>{if(e.key==='Enter')el('commandButton').click()};
+el('consoleClear').onclick=()=>{el('consoleLog').textContent=''};
+let scrubArmed=false,scrubTimer=null;
+el('scrubButton').onclick=()=>{
+ if(!scrubArmed){
+  scrubArmed=true;if(!confirm('此操作将清除所有坏块标记并擦除全部数据！确定继续？')){scrubArmed=false;return}
+  el('scrubButton').textContent='再次点击以执行清除坏块操作！';
+  scrubTimer=setTimeout(()=>{scrubArmed=false;el('scrubButton').textContent='清除坏块标记'},5000);
+  return;
+ }
+ clearTimeout(scrubTimer);scrubArmed=false;el('scrubButton').textContent='清除坏块标记';
+ run(async()=>task({operation:'nand-scrub'}));
+};
+document.querySelectorAll('[data-action]').forEach(b=>b.onclick=()=>run(async()=>{
+ rebooting=true;
+ await task({operation:b.dataset.action});
+ if(b.dataset.action==='exit')text('state','已返回串口，本页面失效；重新上电或串口重启可再次进入');
+}));
+/* 静态文件框的文件名回显（动态数据卷框由 filePicker 处理） */
+document.querySelectorAll('label.file input[type=file]').forEach(inp=>{
+ inp.addEventListener('change',()=>{
+  const file=inp.files[0];
+  inp.closest('label').querySelector('span').textContent=file?file.name:'未选择文件';
+ });
+});
+async function monitor(){
+ if(rebooting)return;
+ if(!localBusy){try{status(await request('/api/task'))}catch(e){remoteBusy=true;text('state','等待设备响应');controls()}}
+ setTimeout(monitor,1500);
+}
+controls();refresh().then(()=>monitor()).catch(e=>{text('output',e.message);el('output').hidden=false;monitor()});
+envGrid().catch(()=>{});
+</script>
+</body>
+</html>
