@@ -101,6 +101,7 @@ int rtk_loader_preserves_device(const void *next, size_t next_size,
 /* boot.c - the one boot policy every board shares. */
 int rtk_board_env_init(void);
 int rtk_boot_system(void);
+size_t rtk_fit_image_size(const void *header);
 
 /* recovery.c - install engine. */
 int rtk_install_system(ulong address, size_t size, void (*poll)(void));
@@ -125,6 +126,7 @@ struct rtk_restore_status {
 
 const struct rtk_restore_status *rtk_restore_status(void);
 int rtk_restore_job(const char *operation, ulong address, size_t size,
-		    size_t total, size_t offset, u32 id, void (*poll)(void));
+		    size_t total, size_t offset, u32 id, void (*poll)(void),
+		    const char *kind, const char *target);
 
 #endif /* __RTK_RECOVERY_H */

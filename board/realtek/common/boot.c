@@ -20,6 +20,24 @@
 /* Set by board_init() and reported by the lamps until the recovery starts. */
 static bool reset_latched;
 
+#define RTK_FIT_PROBE_SIZE	0x4000U
+#define RTK_FIT_MAX_SIZE	0x10000000U
+
+size_t rtk_fit_image_size(const void *header)
+{
+	const unsigned char *p = header;
+	size_t total;
+
+	if (p[0] != 0xd0 || p[1] != 0x0d || p[2] != 0xfe || p[3] != 0xed)
+		return 0;
+	total = ((size_t)p[4] << 24) | ((size_t)p[5] << 16) |
+		((size_t)p[6] << 8) | p[7];
+	if (total < 64 || total > RTK_FIT_MAX_SIZE)
+		return 0;
+
+	return total;
+}
+
 int rtk_board_env_init(void)
 {
 	env_set("bootcmd", "rtk_boot");
@@ -76,10 +94,23 @@ int rtk_boot_system(void)
 	const struct rtk_recovery_layout *l = rtk_recovery_layout();
 	const struct rtk_board_variant *variant = rtk_board_variant();
 	ulong address = env_get_ulong("unzip_src", 16, CONFIG_SYS_LOAD_ADDR);
+	size_t total;
 
 	if (ubi_part((char *)l->ubi_part, NULL))
 		return CMD_RET_FAILURE;
-	if (run_commandf("ubi read 0x%lx %s", address, l->firmware_volume)) {
+	if (run_commandf("ubi read 0x%lx %s 0x%zx", address, l->firmware_volume,
+			 (size_t)RTK_FIT_PROBE_SIZE)) {
+		printf("No system image in %s.\n", l->firmware_volume);
+		return CMD_RET_FAILURE;
+	}
+	total = rtk_fit_image_size((void *)address);
+	if (!total) {
+		printf("Invalid system image in %s.\n", l->firmware_volume);
+		return CMD_RET_FAILURE;
+	}
+	if (total > RTK_FIT_PROBE_SIZE &&
+	    run_commandf("ubi read 0x%lx %s 0x%zx", address, l->firmware_volume,
+			 total)) {
 		printf("No system image in %s.\n", l->firmware_volume);
 		return CMD_RET_FAILURE;
 	}
@@ -91,10 +122,21 @@ int rtk_boot_system(void)
 	return run_commandf("bootm 0x%lx", address);
 }
 
+static int rtk_start_recovery(void);
+
 static int do_rtk_boot(struct cmd_tbl *cmdtp, int flag, int argc,
 		       char *const argv[])
 {
-	return rtk_boot_system();
+	int ret;
+
+	ret = rtk_boot_system();
+	if (ret) {
+		printf("System boot failed (%d); starting the HTTP recovery\n",
+		       ret);
+		ret = rtk_start_recovery();
+	}
+
+	return ret;
 }
 
 U_BOOT_CMD(rtk_boot, 1, 0, do_rtk_boot,

@@ -22,6 +22,8 @@
 static char restore_operation[24];
 static size_t restore_total, restore_offset;
 static u32 restore_id;
+static char restore_kind[8];
+static char restore_target[64];
 
 static void rtk_noop(void)
 {
@@ -126,6 +128,16 @@ static int rtk_http_job_parse(struct http_json_request *request,
 	restore_total = total;
 	restore_offset = offset;
 	restore_id = id;
+	if (start) {
+		if (json_field(request, "kind"))
+			json_text(request, "kind", restore_kind, sizeof(restore_kind));
+		else
+			restore_kind[0] = 0;
+		if (json_field(request, "target"))
+			json_text(request, "target", restore_target, sizeof(restore_target));
+		else
+			restore_target[0] = 0;
+	}
 
 	return 0;
 }
@@ -142,7 +154,7 @@ static int rtk_http_job_run(ulong address, size_t size,
 		rtk_board_leds_busy(state->next, state->total);
 	ret = rtk_restore_job(restore_operation, address, size,
 			      restore_total, restore_offset, restore_id,
-			      service);
+			      service, restore_kind, restore_target);
 	state = rtk_restore_status();
 	if (ret && writes)
 		rtk_board_leds(RTK_LEDS_FAILED);
@@ -164,7 +176,8 @@ static void rtk_http_job_abort(void)
 
 	if (!state->active)
 		return;
-	rtk_restore_job("restore-cancel", 0, 0, 0, 0, state->id, rtk_noop);
+	rtk_restore_job("restore-cancel", 0, 0, 0, 0, state->id, rtk_noop,
+			restore_kind, restore_target);
 }
 
 static int rtk_http_install_loader(ulong address, size_t size, bool bl2,
@@ -181,7 +194,12 @@ static int rtk_http_install_loader(ulong address, size_t size, bool bl2,
 static int rtk_http_boot_upload(ulong address, size_t size)
 {
 	const struct rtk_board_variant *variant = rtk_board_variant();
+	size_t total = rtk_fit_image_size((const void *)address);
 
+	if (!total || total > size) {
+		printf("Uploaded image is not a bootable FIT.\n");
+		return CMD_RET_FAILURE;
+	}
 	env_set_hex("unzip_src", address);
 	if (variant && variant->fit_config)
 		return run_commandf("bootm 0x%lx#%s", address, variant->fit_config);
