@@ -25,6 +25,9 @@
  */
 #define RTK_BOOTARGS 	"console=ttyS0,115200 ubi.mtd=%u rootfstype=squashfs"
 
+#define RTK_FACTORY_MAGIC	"RTLFACT1"
+#define RTK_FACTORY_IMAGE_SIZE	0x800000U
+
 struct rtk_payload {
 	const unsigned char *data;
 	size_t size;
@@ -46,13 +49,6 @@ enum rtk_volume_policy {
 	 * so a layout migration can reserve room for a growing firmware image.
 	 */
 	RTK_VOL_DATA,
-	/*
-	 * Board data, named exactly as the shipped firmware names it: a
-	 * rebuild leaves the volume byte for byte in place, and the volumes
-	 * that do not exist yet are created when their image is imported.
-	 * A delete-all rebuild removes it only after an explicit confirmation.
-	 */
-	RTK_VOL_KEEP,
 };
 
 /* One UBI volume of the rebuild table. */
@@ -60,6 +56,7 @@ struct rtk_ubi_volume {
 	const char *name;
 	enum rtk_volume_policy policy;
 	u64 size;		/* bytes; 0 means "all remaining space" */
+	bool dynamic;
 };
 
 /*
@@ -77,12 +74,10 @@ struct rtk_recovery_layout {
 	const char *firmware_volume;
 	/* The calibration and identity source; installed before a system. */
 	const char *factory_volume;
+	const char *overlay_volume;
 
 	/* Kernel command line, %u replaced by the UBI device index. */
 	const char *bootargs;
-
-	/* Device tree node advertising the board-data volumes. */
-	const char *dt_compatible;
 
 	/* UBI rebuild table. */
 	const struct rtk_ubi_volume *volumes;
@@ -104,11 +99,12 @@ int rtk_boot_system(void);
 size_t rtk_fit_image_size(const void *header);
 
 /* recovery.c - install engine. */
+int rtk_set_default_bootcmd(void);
 int rtk_install_system(ulong address, size_t size, void (*poll)(void));
 int rtk_validate_loader(ulong address, size_t size);
 size_t rtk_loader_write_size(void);
 int rtk_install_loader(ulong address, size_t size, void (*poll)(void));
-int rtk_rebuild_ubi(bool delete_all, void (*poll)(void));
+int rtk_rebuild_ubi(void (*poll)(void));
 
 /* UBI volume management used by the recovery page. */
 int rtk_ubi_create(const char *name, u64 size, bool dynamic);

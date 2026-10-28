@@ -27,27 +27,6 @@
 			gpios = <&gpio0 8 GPIO_ACTIVE_LOW>;
 		};
 	};
-
-	/*
-	 * Volumes the web recovery lists as board data: a rebuild creates them
-	 * empty, then the user imports the factory image that carries the
-	 * calibration and identity data.
-	 */
-	recovery-layout {
-		compatible = "tianyi,tyfza1-recovery-layout";
-
-		config {
-			volume-name = "ubi_Config";
-			volume-type = "dynamic";
-			volume-size = <0x60e000>;
-		};
-
-		fpga {
-			volume-name = "ubi_fpga";
-			volume-type = "dynamic";
-			volume-size = <0x41e000>;
-		};
-	};
 };
 
 /*

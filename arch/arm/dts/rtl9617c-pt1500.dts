@@ -27,20 +27,6 @@
 			gpios = <&gpio0 136 GPIO_ACTIVE_LOW>;
 		};
 	};
-
-	/*
-	 * The factory configuration volume. A rebuild keeps it in place, and
-	 * the web interface lists it as the one board-data import target.
-	 */
-	recovery-layout {
-		compatible = "youhua,pt1500-recovery-layout";
-
-		factory {
-			volume-name = "ubi_Config";
-			volume-type = "dynamic";
-			volume-size = <0x706000>;
-		};
-	};
 };
 
 /*

@@ -5,6 +5,7 @@
  */
 #include <config.h>
 #include <command.h>
+#include <env.h>
 #include <image.h>
 #include <malloc.h>
 #include <memalign.h>
@@ -20,6 +21,37 @@
 static const struct rtk_recovery_layout *layout(void)
 {
 	return rtk_recovery_layout();
+}
+
+int rtk_set_default_bootcmd(void)
+{
+	if (env_set("bootcmd", "rtk_boot") || env_save()) {
+		printf("Setting bootcmd failed; the saved bootcmd is kept.\n");
+		return -EIO;
+	}
+
+	return 0;
+}
+
+static bool factory_image_valid(const struct rtk_recovery_layout *l)
+{
+	unsigned char head[16];
+	size_t used, reserved;
+	unsigned int version, image_size;
+
+	if (ubi_volume_get_size((char *)l->factory_volume, &used, &reserved) ||
+	    !used)
+		return false;
+	if (ubi_volume_read_quiet((char *)l->factory_volume, head, 0,
+				  sizeof(head)))
+		return false;
+	if (memcmp(head, RTK_FACTORY_MAGIC, 8))
+		return false;
+	version = head[8] | head[9] << 8 | head[10] << 16 | head[11] << 24;
+	image_size = head[12] | head[13] << 8 | head[14] << 16 |
+		     head[15] << 24;
+
+	return version == 1 && image_size == RTK_FACTORY_IMAGE_SIZE;
 }
 
 /* Read a volume back and compare it, so a write is never trusted blind. */
@@ -58,16 +90,13 @@ static unsigned int free_pebs(void)
  * first, then staged in a second volume and read back, so the installed
  * system only leaves Flash once the new image is proven good.
  */
-static const struct rtk_ubi_volume *layout_volume(
-	const struct rtk_recovery_layout *l, const char *name);
-
 int rtk_install_system(ulong address, size_t size, void (*poll)(void))
 {
 	const struct rtk_recovery_layout *l = layout();
-	const struct rtk_ubi_volume *data = layout_volume(l, "rootfs_data");
+	const char *overlay = l->overlay_volume;
 	const struct rtk_board_variant *variant = rtk_board_variant();
 	char staging[24];
-	size_t used, reserved, needed;
+	size_t needed;
 	int ret;
 
 	if (!size || fit_check_format((void *)address, size))
@@ -86,8 +115,8 @@ int rtk_install_system(ulong address, size_t size, void (*poll)(void))
 	 * The factory image is the calibration and identity source: without
 	 * it a system has no MAC addresses or radio data to run with.
 	 */
-	if (ubi_volume_get_size(l->factory_volume, &used, &reserved) || !used) {
-		printf("The factory volume is empty or missing; import the factory image first.\n");
+	if (!factory_image_valid(l)) {
+		printf("The factory volume is empty or has no valid RTLFACT1 image; import the factory image first.\n");
 		return -EINVAL;
 	}
 
@@ -103,12 +132,8 @@ int rtk_install_system(ulong address, size_t size, void (*poll)(void))
 	if (free_pebs() < needed && ubi_volume_exists(l->firmware_volume) &&
 	    ubi_volume_remove(l->firmware_volume))
 		return -EIO;
-	/*
-	 * The overlay is the last consumer: drop it only when the new fip
-	 * genuinely does not fit, then re-create it at its reserved size.
-	 */
-	if (free_pebs() < needed && data && ubi_volume_exists(data->name) &&
-	    ubi_volume_remove(data->name))
+	if (free_pebs() < needed && overlay && ubi_volume_exists(overlay) &&
+	    ubi_volume_remove(overlay))
 		return -EIO;
 	if (free_pebs() < needed)
 		return -ENOSPC;
@@ -133,13 +158,7 @@ int rtk_install_system(ulong address, size_t size, void (*poll)(void))
 	}
 	printf("System written to %s (%zu bytes).\n", l->firmware_volume, size);
 
-	if (data && !ubi_volume_exists(data->name)) {
-		ret = ubi_volume_create(data->name, data->size, true);
-		if (ret)
-			return ret;
-		printf("Overlay volume %s re-created (%llu bytes).\n",
-		       data->name, (unsigned long long)data->size);
-	}
+	rtk_set_default_bootcmd();
 
 	return 0;
 }
@@ -268,19 +287,6 @@ out:
 	return ret;
 }
 
-/* The rebuild table entry one volume name maps to, or NULL when unknown. */
-static const struct rtk_ubi_volume *layout_volume(
-	const struct rtk_recovery_layout *l, const char *name)
-{
-	unsigned int i;
-
-	for (i = 0; i < l->nr_volumes; i++)
-		if (!strcmp(l->volumes[i].name, name))
-			return &l->volumes[i];
-
-	return NULL;
-}
-
 /* Physically erase every good eraseblock of the UBI partition. */
 static int erase_ubi_mtd(const struct rtk_recovery_layout *l,
 			 void (*poll)(void))
@@ -324,14 +330,7 @@ static int erase_ubi_mtd(const struct rtk_recovery_layout *l,
 	return 0;
 }
 
-/*
- * Rebuild the UBI layout. The volumes the table marks as board data survive
- * byte for byte where they stand, everything else is erased, and the system
- * volume is re-created over all the free space. A device UBI cannot attach
- * falls back to a full erase, where nothing can be kept; the web flow asks
- * for the factory image afterwards either way.
- */
-int rtk_rebuild_ubi(bool delete_all, void (*poll)(void))
+int rtk_rebuild_ubi(void (*poll)(void))
 {
 	const struct rtk_recovery_layout *l = layout();
 	struct ubi_device *ubi;
@@ -357,45 +356,36 @@ int rtk_rebuild_ubi(bool delete_all, void (*poll)(void))
 	}
 	ubi = ubi_devices[0];
 
-	/* Drop the system volume and every volume the table does not know. */
 	for (i = 0; i < ubi->vtbl_slots; i++) {
-		const struct rtk_ubi_volume *spec;
 		const char *name;
 
 		if (!ubi->volumes[i])
 			continue;
 		name = ubi->volumes[i]->name;
-		spec = layout_volume(l, name);
-		if (spec && spec->policy == RTK_VOL_KEEP && !delete_all)
-			continue;
 		ret = ubi_volume_remove(name);
 		if (ret) {
-			printf("Removing %s failed (%d); kept volumes are untouched, retry the rebuild.\n",
+			printf("Removing %s failed (%d); retry the rebuild.\n",
 			       name, ret);
 			return ret;
 		}
 		poll();
 	}
 
-	/* The system volume takes every free eraseblock. */
 	for (i = 0; i < l->nr_volumes; i++) {
 		const struct rtk_ubi_volume *spec = &l->volumes[i];
 
-		if (spec->policy != RTK_VOL_FIRMWARE &&
-		    spec->policy != RTK_VOL_DATA)
+		if (spec->policy != RTK_VOL_DATA)
 			continue;
-		ret = ubi_volume_create(spec->name, spec->size, true);
+		ret = ubi_volume_create(spec->name, spec->size, spec->dynamic);
 		if (ret) {
-			printf("Creating %s failed (%d); kept volumes are intact, retry the rebuild.\n",
+			printf("Creating %s failed (%d); retry the rebuild.\n",
 			       spec->name, ret);
 			return ret;
 		}
 		poll();
 	}
-	if (delete_all)
-		puts("All volumes removed; board data was explicitly deleted.\n");
-	else
-		puts("Board data kept in place; firmware and overlay are empty, install a system.\n");
+	puts("Factory is empty; import the factory image, then install a system.\n");
+	rtk_set_default_bootcmd();
 
 	return 0;
 }
@@ -421,9 +411,6 @@ int rtk_ubi_remove(const char *name)
 {
 	if (!rtk_ubi_name_ok(name))
 		return -EINVAL;
-	/* Board data is only removable through the confirmed delete-all rebuild. */
-	if (!strcmp(name, "ubi_Config"))
-		return -EPERM;
 	if (!ubi_volume_exists(name))
 		return -ENOENT;
 
@@ -434,8 +421,6 @@ int rtk_ubi_rename(const char *old_name, const char *new_name)
 {
 	if (!rtk_ubi_name_ok(old_name) || !rtk_ubi_name_ok(new_name))
 		return -EINVAL;
-	if (!strcmp(old_name, "ubi_Config"))
-		return -EPERM;
 	if (!ubi_volume_exists(old_name))
 		return -ENOENT;
 	if (ubi_volume_exists(new_name))
