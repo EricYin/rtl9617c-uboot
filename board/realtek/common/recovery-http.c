@@ -198,7 +198,7 @@ static int rtk_http_boot_upload(ulong address, size_t size)
 
 	if (!total || total > size) {
 		printf("Uploaded image is not a bootable FIT.\n");
-		return CMD_RET_FAILURE;
+		return -EINVAL;
 	}
 	env_set_hex("unzip_src", address);
 	if (variant && variant->fit_config)
@@ -212,6 +212,11 @@ static size_t rtk_http_job_write_size(void)
 	return rtk_loader_write_size();
 }
 
+static int rtk_http_set_bootcmd(void)
+{
+	return rtk_set_default_bootcmd();
+}
+
 const struct httpd_board_ops *httpd_board_ops(void)
 {
 	static struct httpd_board_ops ops;
@@ -222,7 +227,6 @@ const struct httpd_board_ops *httpd_board_ops(void)
 		return &ops;
 
 	ops.ubi_partition = l->ubi_part;
-	ops.dt_recovery_layout = l->dt_compatible;
 	ops.led = rtk_http_led;
 	ops.led_busy = rtk_http_led_busy;
 	ops.poll = rtk_http_poll;
@@ -235,6 +239,7 @@ const struct httpd_board_ops *httpd_board_ops(void)
 	ops.job_abort = rtk_http_job_abort;
 	ops.job_write_size = rtk_http_job_write_size;
 	ops.boot_upload = rtk_http_boot_upload;
+	ops.set_bootcmd = rtk_http_set_bootcmd;
 	ops.install_loader = rtk_http_install_loader;
 	ops.install_system = rtk_install_system;
 	ops.rebuild_ubi = rtk_rebuild_ubi;

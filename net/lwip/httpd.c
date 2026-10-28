@@ -10,6 +10,8 @@
 #include <dm/device.h>
 #include <dm/ofnode.h>
 #include <env.h>
+#include <env_internal.h>
+#include <search.h>
 #include <image.h>
 #include <led.h>
 #include <lmb.h>
@@ -21,6 +23,7 @@
 #include <net/httpd-page.h>
 #include <net/httpd.h>
 #include <net/httpd-board.h>
+#include <rtk_recovery.h>
 #include <net-lwip.h>
 #include <part.h>
 #include <stdio_dev.h>
@@ -64,6 +67,8 @@ enum http_job_kind {
 	HTTP_JOB_REBUILD,
 	HTTP_JOB_UBI,
 	HTTP_JOB_ENV,
+	HTTP_JOB_ENV_CLEAR,
+	HTTP_JOB_BOOTCMD,
 	HTTP_JOB_BL2,
 	HTTP_JOB_FIP,
 	HTTP_JOB_BOARD_DATA,
@@ -112,7 +117,6 @@ struct http_post_state {
 
 static struct http_post_state post_state;
 static enum http_job_kind job_kind;
-static bool job_delete_all;
 static char ubi_action[16];
 static char ubi_name[HTTPD_UBI_NAME_LEN];
 static char ubi_new_name[HTTPD_UBI_NAME_LEN];
@@ -145,7 +149,20 @@ static struct http_storage_request backup_request;
 static struct udevice *http_eth;
 static struct netif *http_netif;
 static ulong network_polled;
-static const char *phase = "idle";
+static const char PHASE_IDLE[] = "idle";
+static const char PHASE_UPLOAD[] = "upload";
+static const char PHASE_DOWNLOAD[] = "download";
+static const char PHASE_QUEUED[] = "queued";
+static const char PHASE_WORKING[] = "working";
+static const char PHASE_DONE[] = "done";
+static const char PHASE_ERROR[] = "error";
+static const char PHASE_READY[] = "ready";
+static const char PHASE_ERASE[] = "erase";
+static const char PHASE_WRITE[] = "write";
+static const char PHASE_VERIFY[] = "verify";
+static const char PHASE_BACKUP_READY[] = "backup-ready";
+
+static const char *phase = PHASE_IDLE;
 
 static const struct httpd_board_ops *board_ops_cached;
 
@@ -221,10 +238,9 @@ static void service_network(void)
 }
 
 static int parse_task(void);
-static int run_ubi_rebuild(bool delete_all);
+static int run_ubi_rebuild(void);
 static int run_ubi_management(void);
 static int run_nand_scrub(void);
-static int run_board_data_update(void);
 static int open_download(struct fs_file *file, const char *name);
 static bool upload_region_valid(ulong addr, size_t len);
 static bool mtd_uses_pages(const struct mtd_info *mtd);
@@ -567,7 +583,7 @@ static int open_download(struct fs_file *file, const char *name)
 	file->flags = FS_FILE_FLAGS_HEADER_INCLUDED;
 	file->pextension = owner;
 	downloads++;
-	phase = "download";
+	phase = PHASE_DOWNLOAD;
 	return 1;
 }
 
@@ -661,7 +677,7 @@ err_t httpd_post_begin(void *connection, const char *uri,
 		}
 		buffer_size = 0;
 		env_set_hex("filesize", 0);
-		phase = "upload";
+		phase = PHASE_UPLOAD;
 	} else if (!strcmp(uri, "/api/task") && content_len < sizeof(storage_buf)) {
 		post_state.kind = HTTP_POST_TASK;
 	} else {
@@ -730,7 +746,7 @@ void httpd_post_finished(void *connection, char *response_uri, u16_t response_ur
 				env_set_hex("fileaddr", buffer_addr);
 				env_set_hex("filesize", buffer_size);
 			}
-			phase = "ready";
+			phase = PHASE_READY;
 			ret = 0;
 		} else {
 			storage_buf[post_state.received] = 0;
@@ -741,7 +757,7 @@ void httpd_post_finished(void *connection, char *response_uri, u16_t response_ur
 				output_len = 0;
 				output_buf[0] = 0;
 				job_result = 0;
-				phase = "queued";
+				phase = PHASE_QUEUED;
 			}
 		}
 	}
@@ -768,51 +784,37 @@ static bool storage_name_valid(const char *name)
 	return p - name < 128;
 }
 
-static ofnode recovery_layout_node(void)
-{
-	const struct httpd_board_ops *ops = board_ops();
-
-	if (!ops || !ops->dt_recovery_layout)
-		return ofnode_null();
-
-	return ofnode_by_compatible(ofnode_null(), ops->dt_recovery_layout);
-}
-
 static bool recovery_layout_present(void)
 {
-	return ofnode_valid(recovery_layout_node());
+	const struct rtk_recovery_layout *l = rtk_recovery_layout();
+
+	return l && l->nr_volumes;
 }
 
 static int board_data_config(unsigned int index,
 			     struct http_storage_request *request)
 {
-	ofnode layout = recovery_layout_node();
-	ofnode volume;
-	const char *name;
-	const char *type;
-	u32 size;
+	const struct rtk_recovery_layout *l = rtk_recovery_layout();
+	const struct rtk_ubi_volume *spec;
 	unsigned int current = 0;
+	unsigned int i;
 
-	if (!ofnode_valid(layout))
+	if (!l)
 		return -ENOENT;
-	ofnode_for_each_subnode(volume, layout) {
+	for (i = 0; i < l->nr_volumes; i++) {
+		spec = &l->volumes[i];
+		if (spec->dynamic)
+			continue;
 		if (current++ != index)
 			continue;
-		name = ofnode_read_string(volume, "volume-name");
-		type = ofnode_read_string(volume, "volume-type");
-		if (!name || !type || ofnode_read_u32(volume, "volume-size", &size) ||
-		    !size || !storage_name_valid(name))
+		if (!spec->size || !storage_name_valid(spec->name))
 			return -EINVAL;
 
 		memset(request, 0, sizeof(*request));
 		request->kind = HTTP_STORAGE_UBI;
 		request->operation = HTTP_STORAGE_OP_WRITE;
-		request->size = size;
-		if (!strcmp(type, "dynamic"))
-			request->dynamic = true;
-		else if (strcmp(type, "static"))
-			return -EINVAL;
-		strlcpy(request->target, name, sizeof(request->target));
+		request->size = spec->size;
+		strlcpy(request->target, spec->name, sizeof(request->target));
 		strlcpy(request->partition, httpd_ubi_part(),
 			sizeof(request->partition));
 		return 0;
@@ -862,7 +864,10 @@ static void build_storage_catalog(void)
 			if (comma) json_printf(&j, ",");
 			comma = true;
 			json_printf(&j, "{\"kind\":\"ubi\",\"name\":"); json_string(&j, v->name);
-			json_printf(&j, ",\"size\":%llu}", (unsigned long long)v->used_bytes);
+			json_printf(&j, ",\"size\":%llu,\"reserved\":%llu}",
+				    (unsigned long long)v->used_bytes,
+				    (unsigned long long)((u64)v->reserved_pebs *
+							 (ubi->leb_size - v->data_pad)));
 		}
 	}
 	json_printf(&j, "]}");
@@ -923,12 +928,8 @@ static int parse_task(void)
 			return -EINVAL;
 		job_kind = HTTP_JOB_BOARD_DATA;
 	} else if (!strcmp(op, "ubi-rebuild")) {
-		u64 delete_all;
-
-		if (!recovery_layout_present() ||
-		    json_uint(&r, "delete_all", &delete_all) || delete_all > 1)
+		if (!recovery_layout_present())
 			return -EINVAL;
-		job_delete_all = !!delete_all;
 		job_kind = HTTP_JOB_REBUILD;
 	} else if (!strcmp(op, "ubi-create")) {
 		u64 dynamic;
@@ -975,6 +976,10 @@ static int parse_task(void)
 		    json_text(&r, "value", env_value, sizeof(env_value)))
 			return -EINVAL;
 		job_kind = HTTP_JOB_ENV;
+	} else if (!strcmp(op, "env-clear")) {
+		job_kind = HTTP_JOB_ENV_CLEAR;
+	} else if (!strcmp(op, "bootcmd-default")) {
+		job_kind = HTTP_JOB_BOOTCMD;
 	} else if (!strcmp(op, "boot-production") || !strcmp(op, "boot-upload") ||
 		   !strcmp(op, "reset") || !strcmp(op, "exit")) {
 		strlcpy(action_buf, op, sizeof(action_buf));
@@ -1113,11 +1118,11 @@ static int run_flash_all(void)
 	    buffer_addr != flash_all_alloc_addr ||
 	    buffer_size != flash_all_alloc_size ||
 	    !upload_region_valid(buffer_addr, buffer_size))
-		return CMD_RET_FAILURE;
+		return -EINVAL;
 
 	mtd = whole_flash_mtd();
 	if (IS_ERR(mtd))
-		return CMD_RET_FAILURE;
+		return PTR_ERR(mtd);
 	if (!mtd->erasesize || !mtd->writesize ||
 	    mtd->erasesize % mtd->writesize ||
 	    mtd->size % mtd->erasesize || buffer_size > mtd->size) {
@@ -1158,17 +1163,17 @@ static int run_flash_all(void)
 		chunk = min_t(size_t, mtd->erasesize, buffer_size - offset);
 		memset(block, 0xff, mtd->erasesize);
 		memcpy(block, uploaded + offset, chunk);
-		phase = "erase";
+		phase = PHASE_ERASE;
 		ret = mtd_erase(mtd, &erase);
 		if (ret)
 			goto out_unmap;
-		phase = "write";
+		phase = PHASE_WRITE;
 		ret = mtd_write(mtd, offset, mtd->erasesize, &written, block);
 		if (ret || written != mtd->erasesize) {
 			ret = ret ? ret : -EIO;
 			goto out_unmap;
 		}
-		phase = "verify";
+		phase = PHASE_VERIFY;
 		ret = mtd_read(mtd, offset, mtd->erasesize, &written, verify);
 		if (ret == -EUCLEAN && written == mtd->erasesize)
 			ret = 0;
@@ -1190,7 +1195,7 @@ out_put_mtd:
 	free(verify);
 	free(block);
 	put_mtd_device(mtd);
-	return ret ? CMD_RET_FAILURE : CMD_RET_SUCCESS;
+	return ret ? -EIO : 0;
 }
 
 /* Called only after range and eraseblock-alignment checks, before any erase. */
@@ -1229,33 +1234,42 @@ static int run_storage_job(void)
 
 	if (request.kind == HTTP_STORAGE_UBI) {
 		if (!CONFIG_IS_ENABLED(CMD_UBI))
-			return CMD_RET_FAILURE;
+			return -ENOSYS;
 		ret = ubi_part(request.partition, NULL);
 		if (ret)
-			return CMD_RET_FAILURE;
+			return -ENODEV;
+
+		if (request.operation == HTTP_STORAGE_OP_WRITE &&
+		    job_kind == HTTP_JOB_BOARD_DATA &&
+		    !ubi_volume_exists(request.target)) {
+			ret = ubi_volume_create(request.target, request.size,
+						request.dynamic);
+			if (ret)
+				return -EIO;
+		}
 
 		if (request.operation == HTTP_STORAGE_OP_READ) {
 			if (!request.size) {
 				ret = ubi_volume_get_size(request.target, &used_bytes,
 							  NULL);
 				if (ret)
-					return CMD_RET_FAILURE;
+					return -ENODEV;
 				request.size = used_bytes;
 			}
 			backup_request = request;
 			backup_ready = true;
 			backup_at = get_timer(0);
-			phase = "backup-ready";
-			return CMD_RET_SUCCESS;
+			phase = PHASE_BACKUP_READY;
+			return 0;
 		}
 
 		if (!upload_region_valid(load_addr, request.size))
-			return CMD_RET_FAILURE;
+			return -EINVAL;
 		ret = ubi_volume_get_size(request.target, NULL, &reserved_bytes);
 		if (ret || request.size > reserved_bytes) {
 			printf("Volume '%s' has %zu bytes available; write needs %zu.\n",
 			       request.target, ret ? 0 : reserved_bytes, request.size);
-			return CMD_RET_FAILURE;
+			return -ENOSPC;
 		}
 
 		buffer = map_sysmem(load_addr, request.size);
@@ -1267,29 +1281,29 @@ static int run_storage_job(void)
 			actual_crc = crc32_wd(0, buffer, request.size, CHUNKSZ_CRC32);
 		unmap_sysmem(buffer);
 		if (ret)
-			return CMD_RET_FAILURE;
+			return -EIO;
 		if (actual_crc != expected_crc) {
 			printf("UBI readback CRC mismatch: %08x != %08x.\n",
 			       actual_crc, expected_crc);
-			return CMD_RET_FAILURE;
+			return -EIO;
 		}
 
 		printf("Wrote and verified %zu bytes in UBI volume '%s' (CRC %08x).\n",
 		       request.size, request.target, actual_crc);
-		return CMD_RET_SUCCESS;
+		return 0;
 	}
 
 	mtd_probe_devices();
 	mtd = get_mtd_device_nm(request.target);
 	if (IS_ERR(mtd)) {
 		printf("MTD device '%s' was not found.\n", request.target);
-		return CMD_RET_FAILURE;
+		return -ENODEV;
 	}
 	if (request.operation == HTTP_STORAGE_OP_READ && !request.size)
 		request.size = mtd->size - min_t(u64, request.offset, mtd->size);
 	if (request.offset > mtd->size || request.size > mtd->size - request.offset) {
 		puts("MTD range exceeds the selected device.\n");
-		ret = CMD_RET_FAILURE;
+		ret = -ENOSPC;
 		goto out_put_mtd;
 	}
 	if (mtd_uses_pages(mtd) &&
@@ -1297,14 +1311,14 @@ static int run_storage_job(void)
 	     (request.size % mtd->writesize))) {
 		printf("NAND ranges use 0x%x-byte page alignment.\n",
 		       mtd->writesize);
-		ret = CMD_RET_FAILURE;
+		ret = -EINVAL;
 		goto out_put_mtd;
 	}
 	if (request.operation == HTTP_STORAGE_OP_READ) {
 		backup_request = request;
 		backup_ready = true;
 		backup_at = get_timer(0);
-		phase = "backup-ready";
+		phase = PHASE_BACKUP_READY;
 		ret = 0;
 		goto out_put_mtd;
 	}
@@ -1315,7 +1329,7 @@ static int run_storage_job(void)
 		goto out_put_mtd;
 	}
 	if (!upload_region_valid(load_addr, request.size)) {
-		ret = CMD_RET_FAILURE;
+		ret = -EINVAL;
 		goto out_put_mtd;
 	}
 
@@ -1327,11 +1341,11 @@ static int run_storage_job(void)
 	}
 	ret = storage_mtd_check_write(mtd, request.offset, buffer, request.size);
 	if (ret) goto out_unmap;
-	phase = "erase";
+	phase = PHASE_ERASE;
 	ret = storage_mtd_erase(mtd, request.offset, request.size);
 	if (ret)
 		goto out_unmap;
-	phase = "write";
+	phase = PHASE_WRITE;
 	expected_crc = crc32_wd(0, buffer, request.size, CHUNKSZ_CRC32);
 	ret = storage_mtd_transfer(mtd, request.offset, buffer,
 				   request.size, false);
@@ -1354,7 +1368,7 @@ out_unmap:
 
 out_put_mtd:
 	put_mtd_device(mtd);
-	return ret ? CMD_RET_FAILURE : CMD_RET_SUCCESS;
+	return ret;
 }
 
 
@@ -1377,12 +1391,12 @@ static int run_firmware_update(void)
 					   service_network);
 }
 
-static int run_ubi_rebuild(bool delete_all)
+static int run_ubi_rebuild(void)
 {
 	if (!board_ops() || !board_ops()->rebuild_ubi)
 		return -ENOSYS;
 
-	return board_ops()->rebuild_ubi(delete_all, service_network);
+	return board_ops()->rebuild_ubi(service_network);
 }
 
 static int run_ubi_management(void)
@@ -1416,7 +1430,7 @@ static int run_nand_scrub(void)
 	if (IS_ERR(mtd))
 		return PTR_ERR(mtd);
 
-	phase = "erase";
+	phase = PHASE_ERASE;
 	printf("NAND scrub: clearing bad block markers on %s (%llu bytes)\n",
 	       mtd->name, (unsigned long long)mtd->size);
 
@@ -1442,26 +1456,6 @@ static int run_nand_scrub(void)
 out:
 	put_mtd_device(mtd);
 	return ret;
-}
-
-static int run_board_data_update(void)
-{
-	int ret;
-
-	if (storage_request.kind == HTTP_STORAGE_UBI) {
-		ret = ubi_part(storage_request.partition, NULL);
-		if (ret)
-			return ret;
-		if (!ubi_volume_exists(storage_request.target)) {
-			ret = ubi_volume_create(storage_request.target,
-						storage_request.size,
-						storage_request.dynamic);
-			if (ret)
-				return ret;
-		}
-	}
-
-	return run_storage_job();
 }
 
 static int run_action(void);
@@ -1494,7 +1488,7 @@ static int run_captured_job(void)
 	int ret;
 
 	if (capture_begin(saved_stdout, saved_stderr))
-		return CMD_RET_FAILURE;
+		return -EIO;
 
 	switch (job_kind) {
 	case HTTP_JOB_BL2:
@@ -1504,26 +1498,27 @@ static int run_captured_job(void)
 		ret = run_bootloader_update(false);
 		break;
 	case HTTP_JOB_BOARD_DATA:
-		ret = run_board_data_update();
+		ret = run_storage_job();
 		break;
 	case HTTP_JOB_REBUILD:
-		ret = run_ubi_rebuild(job_delete_all);
+		ret = run_ubi_rebuild();
 		break;
 	case HTTP_JOB_UBI:
 		ret = run_ubi_management();
 		break;
+	case HTTP_JOB_BOOTCMD:
+		ret = board_ops() && board_ops()->set_bootcmd ?
+		      board_ops()->set_bootcmd() : -ENOSYS;
+		break;
+	case HTTP_JOB_ENV_CLEAR:
+		env_set_default(NULL, 0);
+		if (env_save())
+			ret = -EIO;
+		break;
 	case HTTP_JOB_ENV:
-		/* Accept the familiar IP names as persistent recovery settings, too. */
-		if (!strcmp(env_key, "ipaddr"))
-			ret = env_set("httpd_ipaddr", env_value[0] ? env_value : NULL);
-		else if (!strcmp(env_key, "netmask"))
-			ret = env_set("httpd_netmask", env_value[0] ? env_value : NULL);
-		else
-			ret = 0;
-		if (!ret) ret = env_set(env_key, env_value[0] ? env_value : NULL);
-		if (!ret) ret = env_save();
-		if (!ret && !strcmp(env_key, "httpd_dhcp") && env_get_yesno("httpd_dhcp") == 0)
-			uboot_httpd_dhcp_stop();
+		ret = env_set(env_key, env_value[0] ? env_value : NULL);
+		if (!ret)
+			ret = env_save();
 		break;
 	case HTTP_JOB_COMMAND:
 		ret = run_command(command_buf, 0);
@@ -1546,7 +1541,7 @@ static int run_captured_job(void)
 		ret = run_storage_job();
 		break;
 	default:
-		ret = CMD_RET_FAILURE;
+		ret = -ENOSYS;
 		break;
 	}
 	capture_end(saved_stdout, saved_stderr);
@@ -1625,7 +1620,7 @@ static int httpd_run_job(void)
 		char saved_stderr[STDIO_NAME_LEN];
 
 		if (capture_begin(saved_stdout, saved_stderr))
-			return CMD_RET_FAILURE;
+			return -EIO;
 		ret = ops->job_run(buffer_addr, buffer_size, service_network);
 		capture_end(saved_stdout, saved_stderr);
 		return ret;
@@ -1650,7 +1645,7 @@ static void process_job(void)
 		return;
 
 	job_state = HTTP_JOB_RUNNING;
-	phase = "working";
+	phase = PHASE_WORKING;
 	job_result = httpd_run_job();
 	if (job_kind == HTTP_JOB_FLASH_ALL)
 		release_flash_all_upload();
@@ -1665,7 +1660,7 @@ static void process_job(void)
 	storage_buf[0] = '\0';
 	job_kind = HTTP_JOB_NONE;
 	job_state = HTTP_JOB_DONE;
-	if (!backup_ready) phase = job_result ? "error" : "done";
+	if (!backup_ready) phase = job_result ? PHASE_ERROR : PHASE_DONE;
 	build_info();
 	build_storage_catalog();
 }
@@ -1760,7 +1755,7 @@ int uboot_httpd_start(bool with_dhcp)
 			break;
 		if (backup_ready && !downloads && get_timer(backup_at) > 30000) {
 			backup_ready = false;
-			phase = "done";
+			phase = PHASE_DONE;
 		}
 		process_job();
 		httpd_poll();

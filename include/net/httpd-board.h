@@ -29,7 +29,6 @@ struct httpd_board_ops {
 
 	/* Flash naming this product uses; the service defaults when unset. */
 	const char *ubi_partition;
-	const char *dt_recovery_layout;
 
 	/* Extra fields appended to /api/info and to the job status payload. */
 	void (*info)(struct http_json *json);
@@ -60,7 +59,8 @@ struct httpd_board_ops {
 	int (*install_loader)(ulong addr, size_t size, bool bl2,
 			      void (*service)(void));
 	int (*install_system)(ulong addr, size_t size, void (*service)(void));
-	int (*rebuild_ubi)(bool delete_all, void (*service)(void));
+	int (*rebuild_ubi)(void (*service)(void));
+	int (*set_bootcmd)(void);
 
 	/* UBI volume management behind the advanced page. */
 	int (*ubi_create)(const char *name, u64 size, bool dynamic);
