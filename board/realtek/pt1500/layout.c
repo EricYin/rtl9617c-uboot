@@ -20,8 +20,9 @@
  * imported, and the install refuses to run without one.
  */
 static const struct rtk_ubi_volume pt1500_volumes[] = {
-	{ "ubi_Config", RTK_VOL_KEEP },
-	{ "fip", RTK_VOL_FIRMWARE },
+	{ "ubi_Config", RTK_VOL_KEEP, 0 },
+	{ "fip", RTK_VOL_FIRMWARE, 64 * 1024 * 1024 },
+	{ "rootfs_data", RTK_VOL_DATA, 174 * 1000 * 1000 },
 };
 
 const struct rtk_recovery_layout *rtk_recovery_layout(void)

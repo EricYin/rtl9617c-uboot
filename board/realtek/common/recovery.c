@@ -58,9 +58,13 @@ static unsigned int free_pebs(void)
  * first, then staged in a second volume and read back, so the installed
  * system only leaves Flash once the new image is proven good.
  */
+static const struct rtk_ubi_volume *layout_volume(
+	const struct rtk_recovery_layout *l, const char *name);
+
 int rtk_install_system(ulong address, size_t size, void (*poll)(void))
 {
 	const struct rtk_recovery_layout *l = layout();
+	const struct rtk_ubi_volume *data = layout_volume(l, "rootfs_data");
 	const struct rtk_board_variant *variant = rtk_board_variant();
 	char staging[24];
 	size_t used, reserved, needed;
@@ -99,6 +103,13 @@ int rtk_install_system(ulong address, size_t size, void (*poll)(void))
 	if (free_pebs() < needed && ubi_volume_exists(l->firmware_volume) &&
 	    ubi_volume_remove(l->firmware_volume))
 		return -EIO;
+	/*
+	 * The overlay is the last consumer: drop it only when the new fip
+	 * genuinely does not fit, then re-create it at its reserved size.
+	 */
+	if (free_pebs() < needed && data && ubi_volume_exists(data->name) &&
+	    ubi_volume_remove(data->name))
+		return -EIO;
 	if (free_pebs() < needed)
 		return -ENOSPC;
 	ret = ubi_volume_create(staging, size, true);
@@ -121,6 +132,14 @@ int rtk_install_system(ulong address, size_t size, void (*poll)(void))
 		return ret;
 	}
 	printf("System written to %s (%zu bytes).\n", l->firmware_volume, size);
+
+	if (data && !ubi_volume_exists(data->name)) {
+		ret = ubi_volume_create(data->name, data->size, true);
+		if (ret)
+			return ret;
+		printf("Overlay volume %s re-created (%llu bytes).\n",
+		       data->name, (unsigned long long)data->size);
+	}
 
 	return 0;
 }
@@ -312,7 +331,7 @@ static int erase_ubi_mtd(const struct rtk_recovery_layout *l,
  * falls back to a full erase, where nothing can be kept; the web flow asks
  * for the factory image afterwards either way.
  */
-int rtk_rebuild_ubi(void (*poll)(void))
+int rtk_rebuild_ubi(bool delete_all, void (*poll)(void))
 {
 	const struct rtk_recovery_layout *l = layout();
 	struct ubi_device *ubi;
@@ -347,7 +366,7 @@ int rtk_rebuild_ubi(void (*poll)(void))
 			continue;
 		name = ubi->volumes[i]->name;
 		spec = layout_volume(l, name);
-		if (spec && spec->policy == RTK_VOL_KEEP)
+		if (spec && spec->policy == RTK_VOL_KEEP && !delete_all)
 			continue;
 		ret = ubi_volume_remove(name);
 		if (ret) {
@@ -362,9 +381,10 @@ int rtk_rebuild_ubi(void (*poll)(void))
 	for (i = 0; i < l->nr_volumes; i++) {
 		const struct rtk_ubi_volume *spec = &l->volumes[i];
 
-		if (spec->policy != RTK_VOL_FIRMWARE)
+		if (spec->policy != RTK_VOL_FIRMWARE &&
+		    spec->policy != RTK_VOL_DATA)
 			continue;
-		ret = ubi_volume_create(spec->name, 0, true);
+		ret = ubi_volume_create(spec->name, spec->size, true);
 		if (ret) {
 			printf("Creating %s failed (%d); kept volumes are intact, retry the rebuild.\n",
 			       spec->name, ret);
@@ -372,7 +392,67 @@ int rtk_rebuild_ubi(void (*poll)(void))
 		}
 		poll();
 	}
-	puts("Board data kept in place; the system volume is empty, install a system.\n");
+	if (delete_all)
+		puts("All volumes removed; board data was explicitly deleted.\n");
+	else
+		puts("Board data kept in place; firmware and overlay are empty, install a system.\n");
 
 	return 0;
+}
+
+static int rtk_ubi_name_ok(const char *name)
+{
+	return name && name[0] && strlen(name) < 32;
+}
+
+int rtk_ubi_create(const char *name, u64 size, bool dynamic)
+{
+	if (!rtk_ubi_name_ok(name))
+		return -EINVAL;
+	if (!ubi_devices[0])
+		return -ENODEV;
+	if (ubi_volume_exists(name))
+		return -EEXIST;
+
+	return ubi_volume_create(name, size, dynamic);
+}
+
+int rtk_ubi_remove(const char *name)
+{
+	if (!rtk_ubi_name_ok(name))
+		return -EINVAL;
+	/* Board data is only removable through the confirmed delete-all rebuild. */
+	if (!strcmp(name, "ubi_Config"))
+		return -EPERM;
+	if (!ubi_volume_exists(name))
+		return -ENOENT;
+
+	return ubi_volume_remove(name);
+}
+
+int rtk_ubi_rename(const char *old_name, const char *new_name)
+{
+	if (!rtk_ubi_name_ok(old_name) || !rtk_ubi_name_ok(new_name))
+		return -EINVAL;
+	if (!strcmp(old_name, "ubi_Config"))
+		return -EPERM;
+	if (!ubi_volume_exists(old_name))
+		return -ENOENT;
+	if (ubi_volume_exists(new_name))
+		return -EEXIST;
+
+	return ubi_volume_rename(old_name, new_name);
+}
+
+int rtk_ubi_attach(const char *mtd_name)
+{
+	if (!mtd_name || !mtd_name[0])
+		return -EINVAL;
+
+	return ubi_part((char *)mtd_name, NULL);
+}
+
+int rtk_ubi_detach(void)
+{
+	return ubi_detach();
 }

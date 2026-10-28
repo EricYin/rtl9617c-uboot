@@ -60,7 +60,14 @@ struct httpd_board_ops {
 	int (*install_loader)(ulong addr, size_t size, bool bl2,
 			      void (*service)(void));
 	int (*install_system)(ulong addr, size_t size, void (*service)(void));
-	int (*rebuild_ubi)(void (*service)(void));
+	int (*rebuild_ubi)(bool delete_all, void (*service)(void));
+
+	/* UBI volume management behind the advanced page. */
+	int (*ubi_create)(const char *name, u64 size, bool dynamic);
+	int (*ubi_remove)(const char *name);
+	int (*ubi_rename)(const char *old_name, const char *new_name);
+	int (*ubi_attach)(const char *mtd_name);
+	int (*ubi_detach)(void);
 };
 
 /* Implemented by the board; NULL when it needs none of the above. */

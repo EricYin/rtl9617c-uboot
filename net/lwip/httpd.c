@@ -41,6 +41,7 @@ DECLARE_GLOBAL_DATA_PTR;
 #define HTTPD_COMMAND_LEN	512
 #define HTTPD_STORAGE_LEN	2048
 #define HTTPD_STORAGE_NAME_LEN	128
+#define HTTPD_UBI_NAME_LEN	64
 #define HTTPD_OUTPUT_LEN	(64 * 1024)
 #define HTTPD_ACTION_LEN	32
 #define HTTPD_UBI_PART		"ubi_device"
@@ -61,6 +62,7 @@ enum http_job_kind {
 	HTTP_JOB_FIRMWARE,
 	HTTP_JOB_STORAGE,
 	HTTP_JOB_REBUILD,
+	HTTP_JOB_UBI,
 	HTTP_JOB_ENV,
 	HTTP_JOB_BL2,
 	HTTP_JOB_FIP,
@@ -110,6 +112,12 @@ struct http_post_state {
 
 static struct http_post_state post_state;
 static enum http_job_kind job_kind;
+static bool job_delete_all;
+static char ubi_action[16];
+static char ubi_name[HTTPD_UBI_NAME_LEN];
+static char ubi_new_name[HTTPD_UBI_NAME_LEN];
+static u64 ubi_size;
+static bool ubi_dynamic;
 static enum http_job_state job_state;
 static char command_buf[HTTPD_COMMAND_LEN];
 static char action_buf[HTTPD_ACTION_LEN];
@@ -213,7 +221,8 @@ static void service_network(void)
 }
 
 static int parse_task(void);
-static int run_ubi_rebuild(void);
+static int run_ubi_rebuild(bool delete_all);
+static int run_ubi_management(void);
 static int run_nand_scrub(void);
 static int run_board_data_update(void);
 static int open_download(struct fs_file *file, const char *name);
@@ -914,8 +923,47 @@ static int parse_task(void)
 			return -EINVAL;
 		job_kind = HTTP_JOB_BOARD_DATA;
 	} else if (!strcmp(op, "ubi-rebuild")) {
-		if (!recovery_layout_present()) return -EINVAL;
+		u64 delete_all;
+
+		if (!recovery_layout_present() ||
+		    json_uint(&r, "delete_all", &delete_all) || delete_all > 1)
+			return -EINVAL;
+		job_delete_all = !!delete_all;
 		job_kind = HTTP_JOB_REBUILD;
+	} else if (!strcmp(op, "ubi-create")) {
+		u64 dynamic;
+
+		if (json_text(&r, "name", ubi_name, sizeof(ubi_name)) ||
+		    !storage_name_valid(ubi_name) ||
+		    json_uint(&r, "size", &ubi_size) || ubi_size > SIZE_MAX ||
+		    json_uint(&r, "dynamic", &dynamic) || dynamic > 1)
+			return -EINVAL;
+		ubi_dynamic = !!dynamic;
+		strlcpy(ubi_action, "create", sizeof(ubi_action));
+		job_kind = HTTP_JOB_UBI;
+	} else if (!strcmp(op, "ubi-remove")) {
+		if (json_text(&r, "name", ubi_name, sizeof(ubi_name)) ||
+		    !storage_name_valid(ubi_name))
+			return -EINVAL;
+		strlcpy(ubi_action, "remove", sizeof(ubi_action));
+		job_kind = HTTP_JOB_UBI;
+	} else if (!strcmp(op, "ubi-rename")) {
+		if (json_text(&r, "name", ubi_name, sizeof(ubi_name)) ||
+		    !storage_name_valid(ubi_name) ||
+		    json_text(&r, "new_name", ubi_new_name, sizeof(ubi_new_name)) ||
+		    !storage_name_valid(ubi_new_name))
+			return -EINVAL;
+		strlcpy(ubi_action, "rename", sizeof(ubi_action));
+		job_kind = HTTP_JOB_UBI;
+	} else if (!strcmp(op, "ubi-attach")) {
+		if (json_text(&r, "name", ubi_name, sizeof(ubi_name)) ||
+		    !storage_name_valid(ubi_name))
+			return -EINVAL;
+		strlcpy(ubi_action, "attach", sizeof(ubi_action));
+		job_kind = HTTP_JOB_UBI;
+	} else if (!strcmp(op, "ubi-detach")) {
+		strlcpy(ubi_action, "detach", sizeof(ubi_action));
+		job_kind = HTTP_JOB_UBI;
 	} else if (!strcmp(op, "nand-scrub")) {
 		job_kind = HTTP_JOB_NAND_SCRUB;
 	} else if (!strcmp(op, "command")) {
@@ -1329,12 +1377,32 @@ static int run_firmware_update(void)
 					   service_network);
 }
 
-static int run_ubi_rebuild(void)
+static int run_ubi_rebuild(bool delete_all)
 {
 	if (!board_ops() || !board_ops()->rebuild_ubi)
 		return -ENOSYS;
 
-	return board_ops()->rebuild_ubi(service_network);
+	return board_ops()->rebuild_ubi(delete_all, service_network);
+}
+
+static int run_ubi_management(void)
+{
+	const struct httpd_board_ops *ops = board_ops();
+
+	if (!ops)
+		return -ENOSYS;
+	if (!strcmp(ubi_action, "create"))
+		return ops->ubi_create ? ops->ubi_create(ubi_name, ubi_size, ubi_dynamic) : -ENOSYS;
+	if (!strcmp(ubi_action, "remove"))
+		return ops->ubi_remove ? ops->ubi_remove(ubi_name) : -ENOSYS;
+	if (!strcmp(ubi_action, "rename"))
+		return ops->ubi_rename ? ops->ubi_rename(ubi_name, ubi_new_name) : -ENOSYS;
+	if (!strcmp(ubi_action, "attach"))
+		return ops->ubi_attach ? ops->ubi_attach(ubi_name) : -ENOSYS;
+	if (!strcmp(ubi_action, "detach"))
+		return ops->ubi_detach ? ops->ubi_detach() : -ENOSYS;
+
+	return -EINVAL;
 }
 
 static int run_nand_scrub(void)
@@ -1439,7 +1507,10 @@ static int run_captured_job(void)
 		ret = run_board_data_update();
 		break;
 	case HTTP_JOB_REBUILD:
-		ret = run_ubi_rebuild();
+		ret = run_ubi_rebuild(job_delete_all);
+		break;
+	case HTTP_JOB_UBI:
+		ret = run_ubi_management();
 		break;
 	case HTTP_JOB_ENV:
 		/* Accept the familiar IP names as persistent recovery settings, too. */

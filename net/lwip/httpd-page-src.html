@@ -240,8 +240,18 @@ button.mini{border:1px solid var(--border-strong);border-radius:8px;background:v
 <div class="form-actions"><button id="ubiRefresh" class="button plain">刷新</button></div>
 </div>
 <div class="settings-section">
+<h3 class="settings-heading">创建 UBI 卷</h3>
+<div class="form-row form-row-2">
+<div class="field"><label for="ubiName">卷名</label><input id="ubiName" class="field-control" maxlength="31" placeholder="rootfs_data"></div>
+<div class="field"><label for="ubiSize">大小（MB，0=剩余全部）</label><input id="ubiSize" class="field-control" type="number" min="0" value="0"></div>
+</div>
+<label class="settings-help"><input id="ubiDynamic" type="checkbox" checked> 动态卷</label>
+<div class="form-actions"><button id="ubiCreate" class="button">创建卷</button><button id="ubiAttach" class="button plain">附加 ubi_device</button><button id="ubiDetach" class="button plain">分离 UBI</button></div>
+</div>
+<div class="settings-section">
 <h3 class="settings-heading">重建 UBI</h3>
-<p class="settings-help">重建 UBI 时板级数据卷（ubi_Config、ubi_fpga 等）原位保留、数据不动，固件卷与其余卷被删除，剩余空间全部分配给新的空 fip 卷；安装固件前必须先导入 ubi_Config 镜像。若 UBI 已损坏无法识别，将改为整区擦除，此时数据卷无法保留。</p>
+<p class="settings-help">重建 UBI 时板级数据卷（ubi_Config、ubi_fpga 等）原位保留、数据不动，fip 与 rootfs_data 按 64 MB / 174 MB 重建；安装固件前必须先导入 ubi_Config 镜像。勾选“删除所有分区”会连 ubi_Config 一起删除，需要二次确认。若 UBI 已损坏无法识别，将改为整区擦除，此时数据卷无法保留。</p>
+<label class="settings-help"><input id="deleteAllUbi" type="checkbox"> 删除所有分区（含 ubi_Config 板级数据，需二次确认）</label>
 <div class="form-actions"><button id="rebuildButton" class="button button-danger">重建 UBI</button></div>
 </div>
 </div>
@@ -435,8 +445,11 @@ function hint(){
 function ubiTable(){
  const wrap=el('ubiTable');const rows=targets.filter(v=>v.kind==='ubi');
  if(!rows.length){wrap.innerHTML='<div class="sysinfo">未检测到 UBI 卷（可能尚未 attach）。</div>';return}
- let html='<table><tr><th>卷名</th><th style="text-align:right">大小</th></tr>';
- for(const v of rows)html+='<tr><td>'+v.name+'</td><td class="num">'+bytes(v.size)+'</td></tr>';
+ let html='<table><tr><th>卷名</th><th style="text-align:right">大小</th><th>操作</th></tr>';
+ for(const v of rows){
+  const act=v.name==='ubi_Config'?'<span class="settings-help">板级数据，仅重建可删</span>':'<button class="mini" data-ubi-remove="'+v.name+'">删除</button> <button class="mini" data-ubi-rename="'+v.name+'">重命名</button>';
+  html+='<tr><td>'+v.name+'</td><td class="num">'+bytes(v.size)+'</td><td>'+act+'</td></tr>';
+ }
  wrap.innerHTML=html+'</table>';
 }
 function catalog(){
@@ -590,6 +603,27 @@ el('cancel').onclick=()=>{
 };
 el('backupTarget').onchange=hint;
 el('ubiRefresh').onclick=()=>run(()=>refresh());
+el('ubiCreate').onclick=()=>run(async()=>{
+ const name=el('ubiName').value.trim();if(!name)throw new Error('请输入卷名');
+ const mb=Number(el('ubiSize').value)||0;
+ await task({operation:'ubi-create',name,size:Math.round(mb*1024*1024),dynamic:el('ubiDynamic').checked?1:0});
+ el('ubiName').value='';el('ubiSize').value='0';await refresh();
+});
+el('ubiAttach').onclick=()=>run(async()=>{await task({operation:'ubi-attach',name:'ubi_device'});await refresh();});
+el('ubiDetach').onclick=()=>run(async()=>{if(!confirm('分离 UBI 后卷列表不可用，确定？'))return;await task({operation:'ubi-detach'});await refresh();});
+el('ubiTable').onclick=ev=>{
+ const b=ev.target.closest('button[data-ubi-remove],button[data-ubi-rename]');if(!b)return;
+ run(async()=>{
+  if(b.dataset.ubiRemove){
+   if(!confirm('删除 UBI 卷 '+b.dataset.ubiRemove+'？该卷数据会丢失。'))return;
+   await task({operation:'ubi-remove',name:b.dataset.ubiRemove});
+  }else{
+   const n=prompt('新卷名',b.dataset.ubiRename);if(!n)return;
+   await task({operation:'ubi-rename',name:b.dataset.ubiRename,new_name:n});
+  }
+  await refresh();
+ });
+};
 const fw=mountFlow(el('firmwareFile'),'写入 fip 卷');
 fw.go.onclick=()=>run(async()=>{await task({operation:'flash',upload_id:fw.take()})});
 const ub=mountFlow(el('ubootFile'),'写入 U-Boot');
@@ -627,8 +661,12 @@ af.go.onclick=()=>run(async()=>{
  }
 });
 el('rebuildButton').onclick=()=>run(async()=>{
- if(!confirm('重建将保留 ubi_Config 与 ubi_fpga 数据卷（原位不动），删除系统卷并重建为空 fip；完成后需先导入 ubi_Config 镜像再安装固件。确定继续？'))return;
- await task({operation:'ubi-rebuild'});
+ const del=!!(el('deleteAllUbi')&&el('deleteAllUbi').checked);
+ if(del){
+  if(!confirm('删除所有分区会连 ubi_Config 板级数据一起删除，不可恢复。确定继续？'))return;
+  if(!confirm('再次确认：删除所有分区？'))return;
+ }else if(!confirm('重建将保留 ubi_Config 与 ubi_fpga 数据卷（原位不动），重建 fip（64 MB）与 rootfs_data（174 MB）；完成后需先导入 ubi_Config 镜像再安装固件。确定继续？'))return;
+ await task({operation:'ubi-rebuild',delete_all:del?1:0});
 });
 el('backupButton').onclick=()=>run(async()=>{
  const v=targets[Number(el('backupTarget').value)];if(!v)throw new Error('请选择备份目标');

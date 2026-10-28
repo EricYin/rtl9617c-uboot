@@ -220,6 +220,11 @@ const struct httpd_board_ops *httpd_board_ops(void)
 	ops.install_loader = rtk_http_install_loader;
 	ops.install_system = rtk_install_system;
 	ops.rebuild_ubi = rtk_rebuild_ubi;
+	ops.ubi_create = rtk_ubi_create;
+	ops.ubi_remove = rtk_ubi_remove;
+	ops.ubi_rename = rtk_ubi_rename;
+	ops.ubi_attach = rtk_ubi_attach;
+	ops.ubi_detach = rtk_ubi_detach;
 	ready = true;
 
 	return &ops;
