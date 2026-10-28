@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>恢复模式</title>
+<title>rtl9617c恢复模式</title>
 <style>
 :root{color-scheme:light;
 --bg:#eef2f8;--panel:#fbfcff;--panel-2:#f4f7fb;--panel-strong:#fff;--panel-rgb:251,252,255;
@@ -60,7 +60,7 @@ transition:background var(--anim-fast) var(--ease-out),border-color var(--anim-f
 .nav-link .dot{width:7px;height:7px;border-radius:999px;background:var(--primary);box-shadow:0 0 0 3px rgba(var(--primary-rgb),.12);opacity:.52;flex-shrink:0;transition:opacity var(--anim-fast)}
 .nav-link.active .dot{opacity:1;box-shadow:0 0 0 4px rgba(var(--primary-rgb),.18)}
 .sidebar-foot{margin-top:auto;padding:10px 12px 4px;font-size:.72rem;color:var(--muted);overflow-wrap:anywhere}
-.main{padding:var(--sp-xl) var(--sp-lg) 150px;display:grid;gap:var(--sp-md);align-content:start}
+.main{padding:var(--sp-xl) var(--sp-lg) calc(var(--sbh,96px) + 24px);display:grid;gap:var(--sp-md);align-content:start}
 #m{position:relative;width:100%;max-width:var(--card-w);margin:0 auto;border:1px solid var(--border);
 background:linear-gradient(180deg,rgba(var(--panel-rgb),.92),rgba(var(--panel-rgb),.78)),var(--panel);
 border-radius:var(--radius-lg);box-shadow:var(--shadow);overflow:hidden;display:flex;flex-direction:column;min-height:clamp(360px,calc(100vh - 240px),440px)}
@@ -124,9 +124,9 @@ box-shadow:0 0 12px rgba(var(--primary-rgb),.35);transition:width var(--anim) va
 background:linear-gradient(180deg,rgba(var(--primary-rgb),.06),transparent 60%),var(--panel-2);text-align:left;font-size:.82rem;color:var(--muted)}
 .confirm-box b{display:block;color:var(--text);overflow-wrap:anywhere;margin-bottom:2px}
 .confirm-box .form-actions{margin-top:8px}
-.console-card{width:min(560px,100%);margin:0 auto}
-.console-output{height:300px;overflow:auto;white-space:pre-wrap;word-break:break-word;font-family:var(--font-mono);font-size:.75rem;line-height:1.55;
-background:#0a0f1a;color:#d6deea;border:1px solid rgba(148,163,184,.18);border-radius:var(--radius-sm);padding:14px;text-align:left;scrollbar-width:thin}
+.console-card{width:100%}
+.termlike{background:#0a0f1a;color:#d6deea;border:1px solid rgba(148,163,184,.18);border-radius:var(--radius-sm);font-family:var(--font-mono);text-align:left;scrollbar-width:thin;white-space:pre-wrap;word-break:break-word}
+.console-output{height:300px;overflow:auto;font-size:.75rem;line-height:1.55;padding:14px}
 .console-toolbar{display:flex;gap:10px;align-items:center;margin-top:10px}
 .console-toolbar input{flex:1;min-width:0}
 .console-status{font-size:.8rem;color:var(--muted)}
@@ -143,7 +143,13 @@ backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);padding:10px var(-
 #state{font-weight:700;font-size:.9rem}
 #transfer{color:var(--muted);font-variant-numeric:tabular-nums;font-size:.8rem}
 button.mini{border:1px solid var(--border-strong);border-radius:8px;background:var(--panel-strong);color:var(--text);font:inherit;font-size:.78rem;padding:5px 12px;cursor:pointer}
-#output{margin:6px 0 0;font-size:.78rem;color:rgb(var(--danger-rgb));white-space:pre-wrap;word-break:break-word;max-height:120px;overflow:auto;text-align:left;font-family:var(--font-sans)}
+.logpanel{margin-top:8px;border-top:1px dashed var(--border);padding-top:6px}
+.log-head{display:flex;gap:10px;align-items:center}
+#logLatest{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.78rem;color:var(--muted)}
+.log-body{margin:6px 0 0;padding:10px 14px;font-size:.74rem;line-height:1.6;max-height:200px;overflow:auto}
+.log-body .err{color:#f87171}
+.log-body .ok{color:#4ade80}
+.log-body .head{color:#7dd3fc;font-weight:600}
 [hidden]{display:none!important}
 @media(max-width:860px){
 .app{grid-template-columns:1fr}
@@ -151,7 +157,7 @@ button.mini{border:1px solid var(--border-strong);border-radius:8px;background:v
 .nav{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:4px;padding:6px 8px}
 .nav-section{margin-top:6px}
 .sidebar-foot{display:none}
-.main{padding:var(--sp-lg) 12px 200px}
+.main{padding:var(--sp-lg) 12px calc(var(--sbh,96px) + 24px)}
 .statusbar{left:0}
 .form-row-2{grid-template-columns:1fr}
 }
@@ -161,7 +167,7 @@ button.mini{border:1px solid var(--border-strong);border-radius:8px;background:v
 <aside class="sidebar">
 <div class="sidebar-brand">
 <svg class="logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line><line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line><line x1="1" y1="9" x2="4" y2="9"></line><line x1="1" y1="15" x2="4" y2="15"></line><line x1="20" y1="9" x2="23" y2="9"></line><line x1="20" y1="15" x2="23" y2="15"></line></svg>
-<div class="title">恢复模式<small>U-Boot WEBUI</small></div>
+<div class="title">rtl9617c恢复模式<small>U-Boot WEBUI</small></div>
 </div>
 <div class="sidebar-controls">
 <div class="control-row"><div>🌓 主题</div><select id="theme_select"><option value="auto">自动</option><option value="light">浅色</option><option value="dark">深色</option></select></div>
@@ -176,7 +182,7 @@ button.mini{border:1px solid var(--border-strong);border-radius:8px;background:v
 <div class="nav-section-title">高级功能</div>
 <button class="nav-link" data-sec="ubi"><span class="dot"></span><span>UBI 管理</span></button>
 <button class="nav-link" data-sec="backup"><span class="dot"></span><span>分区备份</span></button>
-<button class="nav-link" data-sec="volumes"><span class="dot"></span><span>数据卷</span></button>
+<button class="nav-link" data-sec="volumes"><span class="dot"></span><span>Factory</span></button>
 <button class="nav-link" data-sec="flash"><span class="dot"></span><span>闪存管理</span></button>
 <button class="nav-link" data-sec="env"><span class="dot"></span><span>环境变量</span></button>
 <button class="nav-link" data-sec="console"><span class="dot"></span><span>网页终端</span></button>
@@ -195,83 +201,86 @@ button.mini{border:1px solid var(--border-strong);border-radius:8px;background:v
 <div class="card-head">
 <div class="upload-hero"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"></rect><line x1="8" y1="4" x2="8" y2="1"></line><line x1="16" y1="4" x2="16" y2="1"></line><line x1="8" y1="20" x2="8" y2="23"></line><line x1="16" y1="20" x2="16" y2="23"></line><line x1="1" y1="8" x2="4" y2="8"></line><line x1="1" y1="16" x2="4" y2="16"></line><line x1="20" y1="8" x2="23" y2="8"></line><line x1="20" y1="16" x2="23" y2="16"></line></svg></div>
 <h1>固件升级</h1>
-<p id="hint">固件为单个 FIT 镜像（<strong>内核 + 根文件系统</strong>），将写入 UBI 的 <strong>fip</strong> 卷。<span id="fipInfo"></span></p>
 </div>
 <div class="card-main">
 <div class="sysinfo" id="deviceInfo">正在读取设备信息…</div>
 <div class="i w"><strong>首次安装</strong>
-<ul><li>重建 UBI（数据卷原位保留）→ 导入 fip 固件 → 回到这里刷写</li><li>ubi_Config 卷为空时无法安装固件</li></ul></div>
+<ul><li>重建 UBI → 在「Factory」导入 factory 镜像 → 回到这里刷写</li><li>「Factory」镜像无效或缺失时无法安装</li></ul></div>
+<div class="settings-page"><div class="settings-section">
+<h3 class="settings-heading">FIT镜像</h3>
 <label class="file"><input id="firmwareFile" type="file" accept=".bin"><b>选择文件</b><span>未选择文件</span></label>
+</div></div>
 </div>
 <div class="card-foot"><div class="i w"><strong>警告</strong>
-<ul><li>更新期间请勿断电</li><li>升级完成后设备将自动重启</li><li>请务必选择与本机匹配的固件镜像</li></ul></div></div>
+<ul><li>更新期间请勿断电，完成后自动重启</li><li>固件必须与本机机型匹配</li></ul></div></div>
 </section>
 
 <section id="sec-uboot" hidden>
 <div class="card-head">
 <div class="upload-hero"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><polyline points="9 12 11 14 15 10"></polyline></svg></div>
 <h1>更新 U-Boot</h1>
-<p id="hint">写入 boot 分区的<strong>双 FIP 副本</strong>（先写并校验 FIP1，再写 FIP0）。镜像必须保留本机的 <strong>GPT / BL2 / BL31</strong>。</p>
 </div>
 <div class="card-main">
-<div class="settings-page">
-<div class="settings-section">
-<h3 class="settings-heading">FIP 引导镜像</h3>
-<p class="settings-help">镜像为完整的 boot 区引导镜像（含 GPT / BL2 / BL31 与双 FIP），写入时先校验并写 FIP1，再写 FIP0。</p>
+<div class="settings-page"><div class="settings-section">
+<h3 class="settings-heading">mtd0镜像</h3>
+<div class="i w"><strong>提示</strong>
+<ul><li>镜像为完整 mtd0（GPT + fip0 / fip1），镜像中的 GPT 与 BL2 / BL31 必须与本机一致</li></ul></div>
 <label class="file"><input id="ubootFile" type="file" accept=".img,.bin"><b>选择文件</b><span>未选择文件</span></label>
-</div>
-</div>
+</div></div>
 </div>
 <div class="card-foot"><div class="i w"><strong>警告</strong>
-<ul><li>更新 U-Boot 属高危操作，可能损坏设备</li><li>请务必选择与本机匹配的引导镜像</li><li>更新期间请勿断电</li></ul></div></div>
+<ul><li>更新期间请勿断电</li><li>引导镜像必须与本机机型匹配</li></ul></div></div>
 </section>
 
 <section id="sec-ubi" hidden>
 <div class="card-head">
 <div class="upload-hero"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2"></rect><path d="M7 2v20M17 2v20M2 12h20M2 7h20M2 17h20"></path></svg></div>
 <h1>UBI 管理</h1>
-<p id="hint">查看 UBI 卷布局，或重建整个 UBI 大分区（数据卷原位保留，其余空间全部分配给 <strong>fip</strong> 固件卷）。</p>
+<p id="hint">查看 UBI 卷布局，或重建整个 UBI 大分区。</p>
 </div>
 <div class="card-main">
 <div class="settings-page">
 <div class="settings-section">
 <h3 class="settings-heading">UBI 卷</h3>
 <div class="table-wrap" id="ubiTable"><div class="sysinfo">正在读取…</div></div>
-<div class="form-actions"><button id="ubiRefresh" class="button plain">刷新</button></div>
+<div class="form-actions"><button id="ubiRefresh" class="button plain">刷新</button><button id="ubiAttach" class="button plain">附加 ubi_device</button><button id="ubiDetach" class="button plain">分离 UBI</button></div>
 </div>
 <div class="settings-section">
 <h3 class="settings-heading">创建 UBI 卷</h3>
-<div class="form-row form-row-2">
+<div class="form-row" style="grid-template-columns:2fr 2fr auto;align-items:end">
 <div class="field"><label for="ubiName">卷名</label><input id="ubiName" class="field-control" maxlength="31" placeholder="rootfs_data"></div>
 <div class="field"><label for="ubiSize">大小（MB，0=剩余全部）</label><input id="ubiSize" class="field-control" type="number" min="0" value="0"></div>
+<div class="field"><label for="ubiDynamic" class="settings-help" style="display:flex;align-items:center;gap:6px;margin:0 0 10px;white-space:nowrap"><input id="ubiDynamic" type="checkbox" checked> 动态卷</label></div>
 </div>
-<label class="settings-help"><input id="ubiDynamic" type="checkbox" checked> 动态卷</label>
-<div class="form-actions"><button id="ubiCreate" class="button">创建卷</button><button id="ubiAttach" class="button plain">附加 ubi_device</button><button id="ubiDetach" class="button plain">分离 UBI</button></div>
+<div class="form-actions"><button id="ubiCreate" class="button">创建卷</button></div>
 </div>
 <div class="settings-section">
 <h3 class="settings-heading">重建 UBI</h3>
-<p class="settings-help">重建 UBI 时板级数据卷（ubi_Config、ubi_fpga 等）原位保留、数据不动，fip 与 rootfs_data 按 64 MB / 174 MB 重建；安装固件前必须先导入 ubi_Config 镜像。勾选“删除所有分区”会连 ubi_Config 一起删除，需要二次确认。若 UBI 已损坏无法识别，将改为整区擦除，此时数据卷无法保留。</p>
-<label class="settings-help"><input id="deleteAllUbi" type="checkbox"> 删除所有分区（含 ubi_Config 板级数据，需二次确认）</label>
+<div class="i w"><ul><li>重建删除 UBI 内全部卷，仅创建空 factory（8 MiB static）</li><li>固件卷 fit 在安装固件时按镜像大小创建，rootfs_data 在首次启动固件时自动创建</li><li>重建后需重新导入 factory 镜像才能安装固件</li><li>UBI 无法挂载时将整区擦除</li></ul></div>
 <div class="form-actions"><button id="rebuildButton" class="button button-danger">重建 UBI</button></div>
 </div>
 </div>
 </div>
 <div class="card-foot"><div class="i w"><strong>警告</strong>
-<ul><li>数据卷（ubi_Config/ubi_fpga）原位保留，系统卷将被清空</li><li>若 UBI 无法识别将整区擦除，建议先在「分区备份」导出重要卷</li></ul></div></div>
+<ul><li>重建将删除 UBI 内全部数据，不可恢复</li><li>建议先在「分区备份」导出重要卷</li></ul></div></div>
 </section>
 
 <section id="sec-backup" hidden>
 <div class="card-head">
 <div class="upload-hero"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg></div>
 <h1>分区备份</h1>
-<p id="hint">导出 <strong>UBI 卷</strong>或 <strong>MTD 分区</strong>内容。备份 fip 卷即可导出当前整套固件。</p>
 </div>
 <div class="card-main">
+<div class="settings-page">
+<div class="settings-section">
+<h3 class="settings-heading">导出备份</h3>
 <div class="form-row">
 <div class="field"><label for="backupTarget">备份目标</label><select id="backupTarget" class="field-control"></select></div>
 <p class="settings-help" id="backupHint"></p>
 </div>
 <div class="form-actions"><button id="backupButton" class="button">下载备份</button></div>
+</div>
+</div>
 </div>
 <div class="card-foot"><div class="i w"><strong>说明</strong>
 <ul><li>MTD 备份为物理主数据，坏块填充 FF，不包含 OOB</li><li>整片备份可用于「闪存管理」的整片恢复</li></ul></div></div>
@@ -280,27 +289,25 @@ button.mini{border:1px solid var(--border-strong);border-radius:8px;background:v
 <section id="sec-volumes" hidden>
 <div class="card-head">
 <div class="upload-hero"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg></div>
-<h1>数据卷</h1>
-<p id="hint"><strong>ubi_Config</strong>（工厂校准与身份数据）与 <strong>ubi_fpga</strong>（FPGA 固件）等板级卷。重建 UBI 时这些卷原位保留；若卷不存在，在此导入镜像时自动创建。</p>
+<h1>Factory</h1>
 </div>
 <div class="card-main">
 <div class="settings-page" id="boardDataList"><div class="sysinfo">正在读取…</div></div>
 </div>
 <div class="card-foot"><div class="i w"><strong>警告</strong>
-<ul><li>ubi_Config 镜像来自原厂同名卷的导出数据</li><li>写入错误的数据卷可能导致设备无法启动</li></ul></div></div>
+<ul><li>镜像必须与本机机型匹配</li><li>错误的 factory 镜像可能导致设备无法注册上网</li></ul></div></div>
 </section>
 
 <section id="sec-flash" hidden>
 <div class="card-head">
 <div class="upload-hero"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg></div>
 <h1>闪存管理</h1>
-<p id="hint">向任意分区写入镜像、从整片备份恢复，或清除坏块标记。</p>
 </div>
 <div class="card-main">
 <div class="settings-page">
 <div class="settings-section">
 <h3 class="settings-heading">写入分区</h3>
-<p class="settings-help">向任意 UBI 卷或 MTD 分区写入镜像，写入前无内容校验，请确认目标；MTD 分区写入要求镜像大小按擦除块（128 KiB）对齐。</p>
+<p class="settings-help">向 UBI 卷或 MTD 分区写入镜像，无内容校验，请确认目标。</p>
 <div class="form-row"><div class="field"><label for="writeTarget">目标</label><select id="writeTarget" class="field-control"></select></div></div>
 <label class="file"><input id="partitionFile" type="file" accept=".bin"><b>选择文件</b><span>未选择文件</span></label>
 </div>
@@ -324,13 +331,11 @@ button.mini{border:1px solid var(--border-strong);border-radius:8px;background:v
 <div class="card-head">
 <div class="upload-hero"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></div>
 <h1>环境变量</h1>
-<p id="hint">恢复网络使用 <strong>httpd_ipaddr / httpd_netmask</strong>（下次进入生效）；<strong>httpd_dhcp</strong> 设为 0 关闭 DHCP、设为 1 启用。</p>
 </div>
 <div class="card-main">
 <div class="settings-page">
 <div class="settings-section">
 <h3 class="settings-heading">恢复服务与网络</h3>
-<p class="settings-help">保存后立即写入 Flash，下次进入恢复模式生效；ipaddr / netmask 保存时自动映射为 httpd_ipaddr / httpd_netmask，值留空表示删除该变量。</p>
 <div class="env-grid" id="envGrid"></div>
 </div>
 <div class="settings-section">
@@ -339,29 +344,27 @@ button.mini{border:1px solid var(--border-strong);border-radius:8px;background:v
 <div class="field"><label for="envName">变量名</label><input id="envName" class="field-control" type="text" placeholder="例如 serverip" autocomplete="off" spellcheck="false"></div>
 <div class="field"><label for="envValue">值</label><input id="envValue" class="field-control" type="text" placeholder="留空表示删除" autocomplete="off" spellcheck="false"></div>
 </div>
+<div class="form-actions"><button id="envClear" class="button button-danger">清空所有env</button><button id="envButton" class="button">保存修改</button></div>
 </div>
 </div>
-<div class="form-actions"><button id="envButton" class="button">保存修改</button></div>
 </div>
 <div class="card-foot"><div class="i w"><strong>说明</strong>
-<ul><li>bootcmd 由引导程序在每次开机时重设，在此修改无效</li><li>关闭 DHCP（httpd_dhcp=0）后需设置 httpd_ipaddr 才能访问本页面</li></ul></div></div>
+<ul><li>关闭 DHCP（httpd_dhcp=0）时，需先设置 httpd_ipaddr 才能访问本页面</li></ul></div></div>
 </section>
 
 <section id="sec-console" hidden>
 <div class="card-head">
 <div class="upload-hero"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg></div>
 <h1>网页终端</h1>
-<p id="hint">直接在浏览器中执行 <strong>U-Boot 命令</strong>（例如 mtd list、ubi info）。回显为命令结束后的输出。</p>
 </div>
 <div class="card-main">
 <div class="console-card">
-<div class="console-output" id="consoleLog"></div>
+<div class="console-output termlike" id="consoleLog"></div>
 <div class="console-toolbar">
 <input id="command" class="field-control" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="输入命令，例如 mtd list">
 <button id="commandButton" class="button">执行</button>
 </div>
 <div class="console-toolbar">
-<span class="console-status">此终端可执行任意 U-Boot 命令，请勿暴露在不可信网络中。</span>
 <button id="consoleClear" class="button plain">清空</button>
 <button data-action="exit" class="button plain">返回串口</button>
 </div>
@@ -375,14 +378,21 @@ button.mini{border:1px solid var(--border-strong);border-radius:8px;background:v
 <div class="card-head">
 <div class="upload-hero"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" y1="2" x2="12" y2="12"></line></svg></div>
 <h1>启动与重启</h1>
-<p id="hint">从 fip 卷启动系统、从内存试跑镜像，或重启设备。</p>
 </div>
 <div class="card-main">
 <div class="settings-page">
 <div class="settings-section">
 <h3 class="settings-heading">启动系统</h3>
-<p class="settings-help">从 UBI 的 fip 卷读取固件并启动 OpenWrt。</p>
+<p class="settings-help">从 UBI 的 fit 卷读取固件并启动。</p>
 <div class="form-actions"><button data-action="boot-production" class="button">启动系统</button></div>
+</div>
+<div class="settings-section">
+<h3 class="settings-heading">启动切换</h3>
+<div class="sysinfo" id="bootState">正在读取启动状态…</div>
+<div class="i w"><strong>如何切换启动到原厂固件？</strong>
+<ul><li>转至闪存管理页面，写入 env、env2、ubi_device 分区原厂备份，重启即可启动至原厂固件。</li></ul></div>
+<div class="i w"><strong>如何切换启动到自定义固件？</strong>
+<ul><li>环境变量页面，清空 env</li><li>UBI 管理页面，重建 UBI</li><li>Factory 页面，导入 Factory 镜像</li><li>固件升级页面，刷入自定义固件</li><li>重启即可启动至自定义固件</li></ul></div>
 </div>
 <div class="settings-section">
 <h3 class="settings-heading">内存启动</h3>
@@ -391,7 +401,7 @@ button.mini{border:1px solid var(--border-strong);border-radius:8px;background:v
 </div>
 <div class="settings-section">
 <h3 class="settings-heading">重启设备</h3>
-<p class="settings-help">重启后按住 reset 键可再次进入恢复模式。</p>
+<p class="settings-help">重启后按住 reset 键可再次进入 rtl9617c恢复模式。</p>
 <div class="form-actions"><button data-action="reset" class="button plain">重启</button></div>
 </div>
 </div>
@@ -406,16 +416,39 @@ button.mini{border:1px solid var(--border-strong);border-radius:8px;background:v
 <div class="top"><span id="state">—</span><span id="transfer"></span><button id="cancel" class="mini" hidden>取消传输</button></div>
 <div class="bar" id="progressBar" style="display:none"></div>
 <span class="bar-text" id="barText"></span>
-<pre id="output" hidden></pre>
+<div class="logpanel">
+<div class="log-head"><button id="logToggle" class="mini plain">日志 ▸</button><span id="logLatest"></span><button id="logClear" class="mini plain">清空</button></div>
+<div class="log-body termlike" id="output" hidden></div>
+</div>
 </div></div>
 </div>
 <script>
 'use strict';
 const PHASE={idle:'就绪',upload:'上传中',download:'下载中',queued:'等待执行',working:'正在处理',done:'完成',error:'操作失败',erase:'擦除中',create:'创建卷',ready:'上传完成','backup-ready':'备份已就绪',verify:'校验中',write:'写入中'};
-const VOL_DESC={'ubi_Config':'工厂校准与身份数据','ubi_fpga':'FPGA 固件'};
+const VOL_DESC={'factory':'产线身份与校准数据'};
 let localBusy=false, remoteBusy=true, activeXHR=null, targets=[], flashBytes=0, rebooting=false;
 let activeRestore=0,serverRestore=0,cancelRestore=false;
 const el=id=>document.getElementById(id), text=(id,value)=>{el(id).textContent=value};
+function logScroll(body){
+ if(body.scrollHeight-body.scrollTop-body.clientHeight<48)body.scrollTop=body.scrollHeight;
+}
+function logLine(msg,cls){
+ const body=el('output'),line=document.createElement('div');
+ if(cls)line.className=cls;
+ line.textContent='['+new Date().toTimeString().slice(0,8)+'] '+msg;
+ body.append(line);
+ text('logLatest',msg);
+ if(!body.hidden)logScroll(body);
+}
+function logBlock(msg){
+ const body=el('output'),head=document.createElement('div'),pre=document.createElement('div');
+ head.className='head';head.textContent='['+new Date().toTimeString().slice(0,8)+'] 任务输出';
+ pre.textContent=msg;
+ body.append(head,pre);
+ text('logLatest','任务输出（'+msg.split('\n').length+' 行）');
+ if(!body.hidden)logScroll(body);
+}
+const esc=x=>String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function bytes(n){return n>=1048576?(n/1048576).toFixed(1)+' MiB':n>=1024?(n/1024).toFixed(1)+' KiB':n+' B'}
 /* ── 主题 ── */
 function applyTheme(v){
@@ -439,16 +472,18 @@ function sec(name){
 function hint(){
  const v=targets[Number(el('backupTarget').value)];
  text('backupHint',!v?'':v.whole?'整片 Flash 的完整镜像，可用于整片恢复。':
-  v.name==='fip'?'fip 卷即当前整套固件（kernel + rootfs FIT），备份后可用于重新刷写。':
+  v.name==='fit'?'fit 卷即当前整套固件（kernel + rootfs FIT），备份后可用于重新刷写。':
   v.kind==='mtd'?'MTD 备份为物理主数据，坏块填充 FF；NAND OOB 不包含在文件中。':'UBI 卷数据。');
 }
+const ubiTargets=()=>targets.filter(v=>v.kind==='ubi');
 function ubiTable(){
- const wrap=el('ubiTable');const rows=targets.filter(v=>v.kind==='ubi');
+ const wrap=el('ubiTable');const rows=ubiTargets();
  if(!rows.length){wrap.innerHTML='<div class="sysinfo">未检测到 UBI 卷（可能尚未 attach）。</div>';return}
  let html='<table><tr><th>卷名</th><th style="text-align:right">大小</th><th>操作</th></tr>';
  for(const v of rows){
-  const act=v.name==='ubi_Config'?'<span class="settings-help">板级数据，仅重建可删</span>':'<button class="mini" data-ubi-remove="'+v.name+'">删除</button> <button class="mini" data-ubi-rename="'+v.name+'">重命名</button>';
-  html+='<tr><td>'+v.name+'</td><td class="num">'+bytes(v.size)+'</td><td>'+act+'</td></tr>';
+  const act='<button class="mini" data-ubi-remove="'+esc(v.name)+'">删除</button> <button class="mini" data-ubi-rename="'+esc(v.name)+'">重命名</button>';
+  const sz=bytes(v.size)+(v.reserved&&v.reserved!==v.size?' / '+bytes(v.reserved):'');
+  html+='<tr><td>'+esc(v.name)+'</td><td class="num">'+sz+'</td><td>'+act+'</td></tr>';
  }
  wrap.innerHTML=html+'</table>';
 }
@@ -494,20 +529,20 @@ function mountFlow(input,goLabel,opts){
   name.textContent='文件：'+file.name;
   size.textContent='大小：'+bytes(file.size);
   box.hidden=false;
- });
+ },{refresh:false});
  return {go,input,take:()=>{const id=pendingId;pendingId=null;box.hidden=true;if(!id)throw new Error('请先上传文件');return id}};
 }
 function boardData(items){
  const list=el('boardDataList');list.replaceChildren();
  for(const item of items){
   const section=document.createElement('div');section.className='settings-section';
-  const heading=document.createElement('h3');heading.className='settings-heading';heading.textContent=item.target;
+  const heading=document.createElement('h3');heading.className='settings-heading';heading.textContent=(item.target==='factory'?'Factory':item.target)+'镜像';
   const meta=document.createElement('p');meta.className='settings-help';
-  meta.textContent=(VOL_DESC[item.target]?VOL_DESC[item.target]+' · ':'')+(item.kind==='ubi'?'UBI 卷':'MTD 分区')+' · 卷大小 '+bytes(item.size)+' · 镜像不得超过该大小';
+  meta.textContent=(VOL_DESC[item.target]?VOL_DESC[item.target]+' · ':'')+(item.kind==='ubi'?'UBI static 卷':'MTD 分区')+' · 大小 '+bytes(item.size);
   const input=document.createElement('input');input.type='file';input.accept='.bin';
   section.append(heading,meta,input);filePicker(input);
   const flow=mountFlow(input,'写入 '+item.target,{validate:file=>{
-   if(file.size>item.size)throw new Error('镜像（'+bytes(file.size)+'）大于卷大小 '+bytes(item.size)+'，请确认导出的数据卷镜像');
+   if(file.size>item.size)throw new Error('镜像（'+bytes(file.size)+'）大于卷大小 '+bytes(item.size)+'，请确认 rtl9617c_factory 产出的镜像');
   }});
   flow.go.onclick=()=>run(async()=>{await task({operation:'flash-board-data',target:item.target,upload_id:flow.take()})});
   list.append(section);
@@ -525,25 +560,28 @@ async function refresh(){
  text('deviceInfo','机型：'+d.model+(d.ports?'（'+d.ports+'）':'')+' · RAM / Flash：'+bytes(d.ram_bytes)+' / '+bytes(d.flash_bytes));
  text('sideVersion',(d.project_version||d.version||'—')+(d.build_commit?' · '+d.build_commit:''));
  flashBytes=d.flash_bytes;
- const fip=targets.find(v=>v.kind==='ubi'&&v.name==='fip');
- text('fipInfo',fip?'当前 fip 卷：'+bytes(fip.size)+'。':'');
+ envGrid().catch(()=>{});
+ const fit=ubiTargets().find(v=>v.name==='fit');
  boardData(d.board_data||[]);
  catalog();
 }
 function status(s){
  remoteBusy=s.busy;serverRestore=s.restore_active?s.restore_id:0;
- text('state',PHASE[s.phase]||s.phase||'—');text('output',s.output||'');
- el('output').hidden=!s.output;controls();
+ text('state',PHASE[s.phase]||s.phase||'—');controls();
 }
 async function waitTask(id){
  let misses=0;
  for(;;){
   await new Promise(resolve=>setTimeout(resolve,700));
   let s;
-  try{s=await request('/api/task');misses=0}catch(e){text('state','等待设备响应');if(rebooting&&++misses>=3)return {};continue}
+  try{s=await request('/api/task');misses=0}catch(e){text('state','等待设备响应');if(++misses>=(rebooting?3:30))return {};continue}
   if(s.id!==id)throw new Error('设备任务已变化，请刷新页面');
   status(s);
-  if(s.state==='done'){if(s.code)throw new Error(s.output||'操作失败');return s}
+  if(s.state==='done'){
+   if(s.output&&s.output.trim())logBlock(s.output.trim());
+   if(s.code)throw new Error(s.output||'操作失败');
+   logLine('✔ 完成','ok');return s;
+  }
  }
 }
 async function task(payload){
@@ -574,11 +612,12 @@ function transfer(url,body,responseType,progressBase=0,progressTotal=0){
  });
 }
 function endTransfer(){el('progressBar').style.display='none';text('barText','');text('transfer','')}
-async function run(fn){
+async function run(fn,opts){
+ opts=opts||{};
  if(localBusy||remoteBusy)return;
- localBusy=true;rebooting=false;text('output','');el('output').hidden=true;endTransfer();controls();
- try{await fn();if(!rebooting){text('state','完成');await refresh()}}
- catch(e){rebooting=false;text('state','操作失败');text('output',e.message);el('output').hidden=false}
+ localBusy=true;rebooting=false;endTransfer();controls();
+ try{await fn();if(!rebooting){text('state','完成');if(opts.refresh!==false)await refresh()}}
+ catch(e){rebooting=false;text('state','操作失败');logLine('✘ '+e.message,'err')}
  finally{
   localBusy=false;endTransfer();
   try{const s=await request('/api/task');remoteBusy=s.busy;serverRestore=s.restore_active?s.restore_id:0}catch(e){remoteBusy=true}
@@ -605,12 +644,12 @@ el('backupTarget').onchange=hint;
 el('ubiRefresh').onclick=()=>run(()=>refresh());
 el('ubiCreate').onclick=()=>run(async()=>{
  const name=el('ubiName').value.trim();if(!name)throw new Error('请输入卷名');
- const mb=Number(el('ubiSize').value)||0;
+ const mb=Math.max(0,Number(el('ubiSize').value)||0);
  await task({operation:'ubi-create',name,size:Math.round(mb*1024*1024),dynamic:el('ubiDynamic').checked?1:0});
  el('ubiName').value='';el('ubiSize').value='0';await refresh();
-});
-el('ubiAttach').onclick=()=>run(async()=>{await task({operation:'ubi-attach',name:'ubi_device'});await refresh();});
-el('ubiDetach').onclick=()=>run(async()=>{if(!confirm('分离 UBI 后卷列表不可用，确定？'))return;await task({operation:'ubi-detach'});await refresh();});
+},{refresh:false});
+el('ubiAttach').onclick=()=>run(async()=>{await task({operation:'ubi-attach',name:'ubi_device'});await refresh();},{refresh:false});
+el('ubiDetach').onclick=()=>run(async()=>{if(!confirm('分离 UBI 后卷列表不可用，确定？'))return;await task({operation:'ubi-detach'});await refresh();},{refresh:false});
 el('ubiTable').onclick=ev=>{
  const b=ev.target.closest('button[data-ubi-remove],button[data-ubi-rename]');if(!b)return;
  run(async()=>{
@@ -622,9 +661,9 @@ el('ubiTable').onclick=ev=>{
    await task({operation:'ubi-rename',name:b.dataset.ubiRename,new_name:n});
   }
   await refresh();
- });
+ },{refresh:false});
 };
-const fw=mountFlow(el('firmwareFile'),'写入 fip 卷');
+const fw=mountFlow(el('firmwareFile'),'写入 fit 卷');
 fw.go.onclick=()=>run(async()=>{await task({operation:'flash',upload_id:fw.take()})});
 const ub=mountFlow(el('ubootFile'),'写入 U-Boot');
 ub.go.onclick=()=>run(async()=>{await task({operation:'flash-uboot',upload_id:ub.take()})});
@@ -688,12 +727,8 @@ af.go.onclick=()=>run(async()=>{
  }
 });
 el('rebuildButton').onclick=()=>run(async()=>{
- const del=!!(el('deleteAllUbi')&&el('deleteAllUbi').checked);
- if(del){
-  if(!confirm('删除所有分区会连 ubi_Config 板级数据一起删除，不可恢复。确定继续？'))return;
-  if(!confirm('再次确认：删除所有分区？'))return;
- }else if(!confirm('重建将保留 ubi_Config 与 ubi_fpga 数据卷（原位不动），重建 fip（64 MB）与 rootfs_data（174 MB）；完成后需先导入 ubi_Config 镜像再安装固件。确定继续？'))return;
- await task({operation:'ubi-rebuild',delete_all:del?1:0});
+ if(!confirm('重建将删除 UBI 内全部数据，确定继续？'))return;
+ await task({operation:'ubi-rebuild'});
 });
 el('backupButton').onclick=()=>run(async()=>{
  const v=targets[Number(el('backupTarget').value)];if(!v)throw new Error('请选择备份目标');
@@ -712,6 +747,7 @@ el('backupButton').onclick=()=>run(async()=>{
 let envSaved={};
 async function envGrid(){
  try{envSaved=await request('/api/env')}catch(e){envSaved={}}
+ updateBootState();
  const grid=el('envGrid');grid.replaceChildren();
  for(const key of Object.keys(envSaved)){
   const row=document.createElement('div');row.className='env-row';
@@ -760,6 +796,27 @@ document.querySelectorAll('[data-action]').forEach(b=>b.onclick=()=>run(async()=
  await task({operation:b.dataset.action});
  if(b.dataset.action==='exit')text('state','已返回串口，本页面失效；重新上电或串口重启可再次进入');
 }));
+el('logToggle').onclick=()=>{
+ const body=el('output');body.hidden=!body.hidden;
+ el('logToggle').textContent=body.hidden?'日志 ▸':'日志 ▾';
+ if(!body.hidden)logScroll(body);
+};
+el('logClear').onclick=()=>{el('output').replaceChildren();el('output').hidden=true;text('logLatest','');el('logToggle').textContent='日志 ▸'};
+el('envClear').onclick=()=>run(async()=>{
+ if(!confirm('这将会清空env，是否继续'))return;
+ await task({operation:'env-clear'});
+ envGrid().catch(()=>{});
+});
+function updateBootState(){
+ const cmd=(envSaved&&envSaved.bootcmd)||'';
+ const dot=document.createElement('span');
+ let desc;
+ if(cmd==='rtk_boot'){dot.style.color='#22c55e';desc=' 本引导固件（rtk_boot）'}
+ else if(/sw_tryactive|boot_by_/.test(cmd)){dot.style.color='#f59e0b';desc=' 原厂启动链'}
+ else if(!cmd){dot.style.color='#ef4444';desc=' 未设置（启动失败将进入 Web failsafe）'}
+ else {dot.style.color='#94a3b8';desc=' 自定义：'+cmd.slice(0,60)}
+ el('bootState').replaceChildren(dot,document.createTextNode(desc));
+}
 /* 静态文件框的文件名回显（动态数据卷框由 filePicker 处理） */
 document.querySelectorAll('label.file input[type=file]').forEach(inp=>{
  inp.addEventListener('change',()=>{
@@ -772,8 +829,9 @@ async function monitor(){
  if(!localBusy){try{status(await request('/api/task'))}catch(e){remoteBusy=true;text('state','等待设备响应');controls()}}
  setTimeout(monitor,1500);
 }
-controls();refresh().then(()=>monitor()).catch(e=>{text('output',e.message);el('output').hidden=false;monitor()});
-envGrid().catch(()=>{});
+controls();refresh().then(()=>monitor()).catch(e=>{logLine('✘ '+e.message,'err');monitor()});
+const sbBar=document.querySelector('.statusbar');
+new ResizeObserver(()=>document.documentElement.style.setProperty('--sbh',sbBar.offsetHeight+'px')).observe(sbBar);
 </script>
 </body>
 </html>
