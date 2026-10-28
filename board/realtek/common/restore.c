@@ -34,34 +34,51 @@ static void restore_release(void)
 	memset(&state, 0, sizeof(state));
 }
 
-static int restore_begin(ulong address, size_t size, size_t total)
+static int restore_begin(ulong address, size_t size, size_t total,
+			 const char *kind, const char *target)
 {
 	const void *data;
+	bool partition = kind && !strcmp(kind, "mtd");
 	int ret;
+
 	if (state.active) return -EBUSY;
-	if (size != RTK_BOOT_SIZE || total != layout()->flash_size)
-		return -EINVAL;
-	ret = rtk_validate_loader(address, size);
-	if (ret) return ret;
+	if (partition) {
+		if (!target || !strcmp(target, "boot") ||
+		    !size || size > RESTORE_CHUNK || size % 0x20000)
+			return -EINVAL;
+	} else {
+		if (size != RTK_BOOT_SIZE || total != layout()->flash_size)
+			return -EINVAL;
+		ret = rtk_validate_loader(address, size);
+		if (ret) return ret;
+	}
 	mtd_probe_devices();
-	restore_mtd = get_mtd_device_nm(layout()->nand_dev);
+	restore_mtd = get_mtd_device_nm(partition ? target : layout()->nand_dev);
 	if (IS_ERR(restore_mtd)) {
 		ret = PTR_ERR(restore_mtd); restore_mtd = NULL; return ret;
 	}
 	if (restore_mtd->size != total || restore_mtd->erasesize != 0x20000 ||
 	    restore_mtd->writesize != 0x800) { ret = -EINVAL; goto fail; }
-	boot_image = malloc_cache_aligned(RTK_BOOT_SIZE);
-	if (!boot_image) { ret = -ENOMEM; goto fail; }
-	data = map_sysmem(address, size);
-	memcpy(boot_image, data, size);
-	unmap_sysmem(data);
+	if (partition) {
+		boot_image = NULL;
+	} else {
+		boot_image = malloc_cache_aligned(RTK_BOOT_SIZE);
+		if (!boot_image) { ret = -ENOMEM; goto fail; }
+		data = map_sysmem(address, size);
+		memcpy(boot_image, data, size);
+		unmap_sysmem(data);
+	}
 	ret = ubi_detach();
 	if (ret) goto fail;
 	if (!++generation) generation++;
 	state = (struct rtk_restore_status) {
-		.active = true, .id = generation, .next = RTK_BOOT_SIZE, .total = total
+		.active = true, .id = generation,
+		.next = partition ? 0 : RTK_BOOT_SIZE, .total = total
 	};
-	puts("Full NAND restore started; boot remains untouched until every data chunk is verified.\n");
+	if (partition)
+		printf("Partition '%s' restore started; every chunk is written and verified as it arrives.\n", target);
+	else
+		puts("Full NAND restore started; boot remains untouched until every data chunk is verified.\n");
 	return 0;
 fail:
 	restore_release();
@@ -74,7 +91,8 @@ static int restore_chunk(ulong address, size_t size, size_t offset, void (*poll)
 	unsigned char *check;
 	size_t at, done;
 	int ret = 0;
-	if (!size || size > RESTORE_CHUNK || offset != state.next || offset < RTK_BOOT_SIZE ||
+	if (!size || size > RESTORE_CHUNK || offset != state.next ||
+	    (boot_image && offset < RTK_BOOT_SIZE) ||
 	    size > state.total - state.next || offset % restore_mtd->erasesize ||
 	    size % restore_mtd->erasesize) return -EINVAL;
 	check = malloc_cache_aligned(restore_mtd->erasesize);
@@ -107,21 +125,31 @@ static int restore_chunk(ulong address, size_t size, size_t offset, void (*poll)
 }
 
 int rtk_restore_job(const char *operation, ulong address, size_t size,
-		       size_t total, size_t offset, u32 id, void (*poll)(void))
+		    size_t total, size_t offset, u32 id, void (*poll)(void),
+		    const char *kind, const char *target)
 {
 	int ret;
-	if (!strcmp(operation, "restore-start")) return restore_begin(address, size, total);
+	if (!strcmp(operation, "restore-start")) {
+		ret = restore_begin(address, size, total, kind, target);
+		if (ret) return ret;
+		if (boot_image) return 0;
+		return restore_chunk(address, size, state.next, poll);
+	}
 	if (!state.active || id != state.id) return -ESTALE;
 	if (!strcmp(operation, "restore-cancel")) { restore_release(); return 0; }
 	if (!strcmp(operation, "restore-chunk")) return restore_chunk(address, size, offset, poll);
 	if (!strcmp(operation, "restore-finish")) {
 		if (state.next != state.total) return -EINVAL;
-		ret = rtk_install_loader((ulong)boot_image, RTK_BOOT_SIZE, poll);
-		if (!ret) {
+		if (boot_image) {
+			ret = rtk_install_loader((ulong)boot_image, RTK_BOOT_SIZE, poll);
+			if (ret) return ret;
 			puts("Full NAND restore complete; both boot FIPs written last and read back.\n");
-			restore_release();
+		} else {
+			printf("Partition restore complete; %zu bytes written and verified.\n",
+			       state.total);
 		}
-		return ret;
+		restore_release();
+		return 0;
 	}
 	return -EINVAL;
 }

@@ -594,10 +594,37 @@ const fw=mountFlow(el('firmwareFile'),'写入 fip 卷');
 fw.go.onclick=()=>run(async()=>{await task({operation:'flash',upload_id:fw.take()})});
 const ub=mountFlow(el('ubootFile'),'写入 U-Boot');
 ub.go.onclick=()=>run(async()=>{await task({operation:'flash-uboot',upload_id:ub.take()})});
-const wr=mountFlow(el('partitionFile'),'写入目标分区');
+const wr=mountFlow(el('partitionFile'),'写入目标分区',{check:true,validate:file=>{
+ const v=targets[Number(el('writeTarget').value)];if(!v)return;
+ if(v.kind==='mtd'&&file.size!==v.size)throw new Error('文件大小必须与目标分区一致（'+bytes(v.size)+'）');
+ if(v.kind==='ubi'&&file.size>v.size)throw new Error('镜像（'+bytes(file.size)+'）大于卷大小 '+bytes(v.size));
+}});
 wr.go.onclick=()=>run(async()=>{
  const v=targets[Number(el('writeTarget').value)];if(!v)throw new Error('请选择目标分区');
- await task({operation:'write',kind:v.kind,target:v.name,upload_id:wr.take()});
+ const file=wr.input.files[0];if(!file)throw new Error('请选择文件');
+ if(v.kind==='mtd'){
+  cancelRestore=false;let restore=0;activeRestore=0;
+  try{
+   const segment=4*1024*1024;
+   const header=await transfer('/api/upload',file.slice(0,segment),'json',0,file.size);
+   const started=await task({operation:'restore-start',kind:'mtd',target:v.name,total:file.size,upload_id:header.upload_id});
+   restore=started.restore_id;if(!restore)throw new Error('请求失败');
+   activeRestore=restore;
+   for(let offset=started.restore_offset;offset<file.size;offset+=segment){
+    if(cancelRestore)throw new Error('传输已取消');
+    const upload=await transfer('/api/upload',file.slice(offset,offset+segment),'json',offset,file.size);
+    await task({operation:'restore-chunk',restore_id:restore,offset,upload_id:upload.upload_id});
+   }
+   if(cancelRestore)throw new Error('传输已取消');
+   await task({operation:'restore-finish',restore_id:restore});activeRestore=0;
+  }finally{
+   if(activeRestore){try{await task({operation:'restore-cancel',restore_id:activeRestore})}catch(e){}}
+   activeRestore=0;cancelRestore=false;
+  }
+  return;
+ }
+ const id=await uploadFile(wr.input);
+ await task({operation:'write',kind:v.kind,target:v.name,upload_id:id});
 });
 const im=mountFlow(el('initramfsFile'),'从内存启动');
 im.go.onclick=()=>run(async()=>{const id=im.take();rebooting=true;await task({operation:'boot-upload',upload_id:id})});
