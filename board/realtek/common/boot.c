@@ -7,6 +7,7 @@
  * a value left in NAND by a previous firmware, so a board with erased or
  * unreadable environment still boots.
  */
+#include <asm/global_data.h>
 #include <config.h>
 #include <command.h>
 #include <env.h>
@@ -16,6 +17,8 @@
 #include <rtk_recovery.h>
 #include <ubi_uboot.h>
 #include <asm/arch/soc.h>
+
+DECLARE_GLOBAL_DATA_PTR;
 
 /* Set by board_init() and reported by the lamps until the recovery starts. */
 static bool reset_latched;
@@ -40,17 +43,17 @@ size_t rtk_fit_image_size(const void *header)
 
 int rtk_board_env_init(void)
 {
-	env_set("bootcmd", "rtk_boot");
-	env_set("bootmenu_0", "Start OpenWrt=rtk_boot");
-	env_set("bootmenu_1", "Web recovery=rtk_recovery");
-	/*
-	 * Partitions come from the device tree. A unit that still carries the
-	 * mtdparts string of the firmware this replaces would make
-	 * mtd_probe_devices() delete the device tree partitions and fail to
-	 * recreate any, so both variables are dropped.
-	 */
-	env_set("mtdparts", NULL);
+	bool repair;
+
 	env_set("mtdids", NULL);
+
+	repair = gd->env_valid == ENV_INVALID ||
+		 ((gd->flags & GD_FLG_ENV_READY) && !env_get("bootcmd"));
+	if (repair) {
+		env_set_default(NULL, 0);
+		if (env_save())
+			printf("Environment save failed; using built-in defaults.\n");
+	}
 
 	return 0;
 }
@@ -114,6 +117,10 @@ int rtk_boot_system(void)
 		printf("No system image in %s.\n", l->firmware_volume);
 		return CMD_RET_FAILURE;
 	}
+	if (l->overlay_volume && !ubi_volume_exists(l->overlay_volume) &&
+	    ubi_volume_create(l->overlay_volume, 0, true))
+		printf("No overlay volume; the system stays read-only.\n");
+
 	env_set_hex("unzip_src", address);
 	rtk_bootargs();
 	if (variant && variant->fit_config)
@@ -141,6 +148,12 @@ static int do_rtk_boot(struct cmd_tbl *cmdtp, int flag, int argc,
 
 U_BOOT_CMD(rtk_boot, 1, 0, do_rtk_boot,
 	   "boot the system from the firmware volume", "");
+
+void board_autoboot_fail(void)
+{
+	printf("Boot failed; starting the HTTP recovery\n");
+	rtk_start_recovery();
+}
 
 /*
  * The recovery service is a build option: a board that leaves CONFIG_CMD_HTTPD
@@ -186,7 +199,6 @@ static int rtk_board_recovery_spy(void)
 	puts("Reset held: starting the HTTP recovery\n");
 	ret = rtk_start_recovery();
 	rtk_board_leds(RTK_LEDS_OFF);
-	env_set("bootcmd", "rtk_boot");
 	if (ret)
 		printf("Recovery network failed (%d); use rtk_recovery to retry.\n",
 		       ret);
