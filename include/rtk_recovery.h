@@ -25,7 +25,6 @@
  */
 #define RTK_BOOTARGS 	"console=ttyS0,115200 ubi.mtd=%u rootfstype=squashfs"
 
-#define RTK_FACTORY_MAGIC	"RTLFACT1"
 #define RTK_FACTORY_IMAGE_SIZE	0x800000U
 
 struct rtk_payload {
@@ -72,8 +71,6 @@ struct rtk_recovery_layout {
 
 	/* The system image: kernel and root filesystem in a single volume. */
 	const char *firmware_volume;
-	/* The calibration and identity source; installed before a system. */
-	const char *factory_volume;
 	const char *overlay_volume;
 
 	/* Kernel command line, %u replaced by the UBI device index. */

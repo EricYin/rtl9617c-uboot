@@ -24,7 +24,6 @@ const struct rtk_recovery_layout *rtk_recovery_layout(void)
 		.flash_size = 0x10000000,
 
 		.firmware_volume = "fit",
-		.factory_volume = "factory",
 
 		.bootargs = RTK_BOOTARGS,
 		.overlay_volume = "rootfs_data",

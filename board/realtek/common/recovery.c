@@ -33,27 +33,6 @@ int rtk_set_default_bootcmd(void)
 	return 0;
 }
 
-static bool factory_image_valid(const struct rtk_recovery_layout *l)
-{
-	unsigned char head[16];
-	size_t used, reserved;
-	unsigned int version, image_size;
-
-	if (ubi_volume_get_size((char *)l->factory_volume, &used, &reserved) ||
-	    !used)
-		return false;
-	if (ubi_volume_read_quiet((char *)l->factory_volume, head, 0,
-				  sizeof(head)))
-		return false;
-	if (memcmp(head, RTK_FACTORY_MAGIC, 8))
-		return false;
-	version = head[8] | head[9] << 8 | head[10] << 16 | head[11] << 24;
-	image_size = head[12] | head[13] << 8 | head[14] << 16 |
-		     head[15] << 24;
-
-	return version == 1 && image_size == RTK_FACTORY_IMAGE_SIZE;
-}
-
 /* Read a volume back and compare it, so a write is never trusted blind. */
 static int volume_verify(char *name, const void *data, size_t length,
 			 void (*poll)(void))
@@ -79,12 +58,6 @@ static int volume_verify(char *name, const void *data, size_t length,
 	return ret;
 }
 
-/* The pool ubi_volume_create() draws from; it checks the same counter. */
-static unsigned int free_pebs(void)
-{
-	return ubi_devices[0]->avail_pebs;
-}
-
 /*
  * Install the system image into its own volume. The image is verified in RAM
  * first, then staged in a second volume and read back, so the installed
@@ -94,16 +67,10 @@ int rtk_install_system(ulong address, size_t size, void (*poll)(void))
 {
 	const struct rtk_recovery_layout *l = layout();
 	const char *overlay = l->overlay_volume;
-	const struct rtk_board_variant *variant = rtk_board_variant();
 	char staging[24];
-	size_t needed;
 	int ret;
 
 	if (!size || fit_check_format((void *)address, size))
-		return -EINVAL;
-	/* Only an image carrying this product's configuration is bootable. */
-	if (variant && variant->fit_config &&
-	    fit_conf_get_node((void *)address, variant->fit_config) < 0)
 		return -EINVAL;
 	ret = ubi_part((char *)l->ubi_part, NULL);
 	if (ret)
@@ -111,32 +78,14 @@ int rtk_install_system(ulong address, size_t size, void (*poll)(void))
 	if (!ubi_devices[0] || ubi_devices[0]->ro_mode)
 		return -EROFS;
 
-	/*
-	 * The factory image is the calibration and identity source: without
-	 * it a system has no MAC addresses or radio data to run with.
-	 */
-	if (!factory_image_valid(l)) {
-		printf("The factory volume is empty or has no valid RTLFACT1 image; import the factory image first.\n");
-		return -EINVAL;
-	}
-
 	snprintf(staging, sizeof(staging), "%s.new", l->firmware_volume);
 	if (ubi_volume_exists(staging) && ubi_volume_remove(staging))
 		return -EIO;
-	/*
-	 * The staged copy is as large as the image. Free the installed volume
-	 * only when the free pool cannot hold both, so the old system stays
-	 * bootable while the new one is written.
-	 */
-	needed = DIV_ROUND_UP(size, ubi_devices[0]->leb_size);
-	if (free_pebs() < needed && ubi_volume_exists(l->firmware_volume) &&
+	if (overlay && ubi_volume_exists(overlay) && ubi_volume_remove(overlay))
+		return -EIO;
+	if (ubi_volume_exists(l->firmware_volume) &&
 	    ubi_volume_remove(l->firmware_volume))
 		return -EIO;
-	if (free_pebs() < needed && overlay && ubi_volume_exists(overlay) &&
-	    ubi_volume_remove(overlay))
-		return -EIO;
-	if (free_pebs() < needed)
-		return -ENOSPC;
 	ret = ubi_volume_create(staging, size, true);
 	if (ret)
 		return ret;
@@ -157,8 +106,6 @@ int rtk_install_system(ulong address, size_t size, void (*poll)(void))
 		return ret;
 	}
 	printf("System written to %s (%zu bytes).\n", l->firmware_volume, size);
-
-	rtk_set_default_bootcmd();
 
 	return 0;
 }

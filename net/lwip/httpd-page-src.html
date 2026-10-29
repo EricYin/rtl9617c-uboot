@@ -205,14 +205,14 @@ button.mini{border:1px solid var(--border-strong);border-radius:8px;background:v
 <div class="card-main">
 <div class="sysinfo" id="deviceInfo">正在读取设备信息…</div>
 <div class="i w"><strong>首次安装</strong>
-<ul><li>重建 UBI → 在「Factory」导入 factory 镜像 → 回到这里刷写</li><li>「Factory」镜像无效或缺失时无法安装</li></ul></div>
+<ul><li>重建 UBI → 在「Factory」导入 factory 镜像 → 回到这里刷写</li><li>「环境变量」首次刷写后请确保恢复为本引导默认</li></ul></div>
 <div class="settings-page"><div class="settings-section">
 <h3 class="settings-heading">FIT镜像</h3>
 <label class="file"><input id="firmwareFile" type="file" accept=".bin"><b>选择文件</b><span>未选择文件</span></label>
 </div></div>
 </div>
 <div class="card-foot"><div class="i w"><strong>警告</strong>
-<ul><li>更新期间请勿断电，完成后自动重启</li><li>固件必须与本机机型匹配</li></ul></div></div>
+<ul><li>刷写会清空旧的系统与配置数据</li><li>更新期间请勿断电，完成后自动重启</li><li>固件必须与本机机型匹配</li></ul></div></div>
 </section>
 
 <section id="sec-uboot" hidden>
@@ -565,11 +565,22 @@ async function refresh(){
  boardData(d.board_data||[]);
  catalog();
 }
+function updateBar(loaded,total){
+ el('progressBar').style.display='block';
+ el('progressBar').style.setProperty('--percent',total?100*loaded/total:0);
+ text('barText',total?Math.floor(100*loaded/total)+'%':'');
+}
 function status(s){
  remoteBusy=s.busy;serverRestore=s.restore_active?s.restore_id:0;
- text('state',PHASE[s.phase]||s.phase||'—');controls();
+ text('state',PHASE[s.phase]||s.phase||'—');
+ if(s.restore_active&&s.restore_total){
+  updateBar(s.restore_offset,s.restore_total);
+  text('transfer',bytes(s.restore_offset)+' / '+bytes(s.restore_total));
+ }
+ controls();
 }
-async function waitTask(id){
+async function waitTask(id,opts){
+ opts=opts||{};
  let misses=0;
  for(;;){
   await new Promise(resolve=>setTimeout(resolve,700));
@@ -580,13 +591,13 @@ async function waitTask(id){
   if(s.state==='done'){
    if(s.output&&s.output.trim())logBlock(s.output.trim());
    if(s.code)throw new Error(s.output||'操作失败');
-   logLine('✔ 完成','ok');return s;
+   if(!opts.silent)logLine('✔ 完成','ok');return s;
   }
  }
 }
-async function task(payload){
+async function task(payload,opts){
  const s=await request('/api/task',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
- return waitTask(s.id);
+ return waitTask(s.id,opts);
 }
 function transfer(url,body,responseType,progressBase=0,progressTotal=0){
  return new Promise((resolve,reject)=>{
@@ -686,7 +697,8 @@ wr.go.onclick=()=>run(async()=>{
    for(let offset=started.restore_offset;offset<file.size;offset+=segment){
     if(cancelRestore)throw new Error('传输已取消');
     const upload=await transfer('/api/upload',file.slice(offset,offset+segment),'json',offset,file.size);
-    await task({operation:'restore-chunk',restore_id:restore,offset,upload_id:upload.upload_id});
+    await task({operation:'restore-chunk',restore_id:restore,offset,upload_id:upload.upload_id},{silent:true});
+    logLine('已写入 '+bytes(Math.min(offset+segment,file.size))+' / '+bytes(file.size));
    }
    if(cancelRestore)throw new Error('传输已取消');
    await task({operation:'restore-finish',restore_id:restore});activeRestore=0;
