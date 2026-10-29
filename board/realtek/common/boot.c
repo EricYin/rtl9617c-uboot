@@ -13,6 +13,7 @@
 #include <env.h>
 #include <event.h>
 #include <net/httpd.h>
+#include <image.h>
 #include <rtk_board.h>
 #include <rtk_recovery.h>
 #include <ubi_uboot.h>
@@ -22,24 +23,6 @@ DECLARE_GLOBAL_DATA_PTR;
 
 /* Set by board_init() and reported by the lamps until the recovery starts. */
 static bool reset_latched;
-
-#define RTK_FIT_PROBE_SIZE	0x4000U
-#define RTK_FIT_MAX_SIZE	0x10000000U
-
-size_t rtk_fit_image_size(const void *header)
-{
-	const unsigned char *p = header;
-	size_t total;
-
-	if (p[0] != 0xd0 || p[1] != 0x0d || p[2] != 0xfe || p[3] != 0xed)
-		return 0;
-	total = ((size_t)p[4] << 24) | ((size_t)p[5] << 16) |
-		((size_t)p[6] << 8) | p[7];
-	if (total < 64 || total > RTK_FIT_MAX_SIZE)
-		return 0;
-
-	return total;
-}
 
 int rtk_board_env_init(void)
 {
@@ -77,16 +60,6 @@ void rtk_board_preboot(void)
 	taurus_xram_restore();
 }
 
-/* Kernel command line; the image volume carries both kernel and root. */
-static void rtk_bootargs(void)
-{
-	const struct rtk_recovery_layout *l = rtk_recovery_layout();
-	char cmdline[192];
-
-	snprintf(cmdline, sizeof(cmdline), l->bootargs, l->ubi_mtd);
-	env_set("bootargs", cmdline);
-}
-
 /*
  * Read the system image - kernel and root filesystem in one volume - and
  * start it. Shared by the boot command and by the recovery service when it
@@ -96,24 +69,15 @@ int rtk_boot_system(void)
 {
 	const struct rtk_recovery_layout *l = rtk_recovery_layout();
 	ulong address = env_get_ulong("unzip_src", 16, CONFIG_SYS_LOAD_ADDR);
-	size_t total;
 
 	if (ubi_part((char *)l->ubi_part, NULL))
 		return CMD_RET_FAILURE;
-	if (run_commandf("ubi read 0x%lx %s 0x%zx", address, l->firmware_volume,
-			 (size_t)RTK_FIT_PROBE_SIZE)) {
+	if (ubi_volume_read(l->firmware_volume, (char *)address, 0, 0)) {
 		printf("No system image in %s.\n", l->firmware_volume);
 		return CMD_RET_FAILURE;
 	}
-	total = rtk_fit_image_size((void *)address);
-	if (!total) {
+	if (fit_check_format((const void *)address, IMAGE_SIZE_INVAL)) {
 		printf("Invalid system image in %s.\n", l->firmware_volume);
-		return CMD_RET_FAILURE;
-	}
-	if (total > RTK_FIT_PROBE_SIZE &&
-	    run_commandf("ubi read 0x%lx %s 0x%zx", address, l->firmware_volume,
-			 total)) {
-		printf("No system image in %s.\n", l->firmware_volume);
 		return CMD_RET_FAILURE;
 	}
 	if (l->overlay_volume && !ubi_volume_exists(l->overlay_volume) &&
@@ -121,7 +85,6 @@ int rtk_boot_system(void)
 		printf("No overlay volume; the system stays read-only.\n");
 
 	env_set_hex("unzip_src", address);
-	rtk_bootargs();
 
 	return run_commandf("bootm 0x%lx", address);
 }

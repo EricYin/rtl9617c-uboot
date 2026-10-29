@@ -26,7 +26,6 @@ const struct rtk_recovery_layout *rtk_recovery_layout(void)
 
 		.firmware_volume = "fit",
 
-		.bootargs = RTK_BOOTARGS,
 		.overlay_volume = "rootfs_data",
 		.volumes = pt1500_volumes,
 		.nr_volumes = ARRAY_SIZE(pt1500_volumes),

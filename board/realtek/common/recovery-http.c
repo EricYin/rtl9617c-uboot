@@ -11,6 +11,7 @@
 #include <config.h>
 #include <command.h>
 #include <env.h>
+#include <image.h>
 #include <string.h>
 #include <net/httpd-board.h>
 #include <rtk_board.h>
@@ -193,9 +194,7 @@ static int rtk_http_install_loader(ulong address, size_t size, bool bl2,
 /* Boot an image straight out of RAM, without touching Flash. */
 static int rtk_http_boot_upload(ulong address, size_t size)
 {
-	size_t total = rtk_fit_image_size((const void *)address);
-
-	if (!total || total > size) {
+	if (fit_check_format((const void *)address, size)) {
 		printf("Uploaded image is not a bootable FIT.\n");
 		return -EINVAL;
 	}

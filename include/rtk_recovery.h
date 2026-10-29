@@ -18,13 +18,6 @@
 #define RTK_FIP0_OFFSET		0x40000U
 #define RTK_FIP1_OFFSET		0x100000U
 
-/*
- * Kernel command line every board uses unless it has a reason not to. Kernel
- * and root filesystem ship in one image volume, so the kernel finds the root
- * itself; only the UBI device is named here.
- */
-#define RTK_BOOTARGS 	"console=ttyS0,115200 ubi.mtd=%u rootfstype=squashfs"
-
 #define RTK_FACTORY_IMAGE_SIZE	0x800000U
 
 struct rtk_payload {
@@ -73,9 +66,6 @@ struct rtk_recovery_layout {
 	const char *firmware_volume;
 	const char *overlay_volume;
 
-	/* Kernel command line, %u replaced by the UBI device index. */
-	const char *bootargs;
-
 	/* UBI rebuild table. */
 	const struct rtk_ubi_volume *volumes;
 	unsigned int nr_volumes;
@@ -93,7 +83,6 @@ int rtk_loader_preserves_device(const void *next, size_t next_size,
 /* boot.c - the one boot policy every board shares. */
 int rtk_board_env_init(void);
 int rtk_boot_system(void);
-size_t rtk_fit_image_size(const void *header);
 
 /* recovery.c - install engine. */
 int rtk_set_default_bootcmd(void);
