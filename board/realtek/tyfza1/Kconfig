@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0+
-if TARGET_TYFZA1
+if TARGET_TYFZA1_2P5G || TARGET_TYFZA1_4GE
 config SYS_BOARD
 	default "tyfza1"
 config SYS_VENDOR

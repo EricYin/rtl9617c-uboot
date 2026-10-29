@@ -8,7 +8,6 @@
  */
 #include <config.h>
 #include <dm.h>
-#include <env.h>
 #include <phy.h>
 #include <asm/io.h>
 #include <linux/delay.h>
@@ -19,17 +18,12 @@
 static int tyfza1_ni_prepare(struct udevice *dev)
 {
 	struct cortina_ni_priv *priv = dev_get_priv(dev);
-	const char *variant = env_get("board_variant");
 	u32 value;
-
-	priv->maps[4].phy_id = -1;
-	priv->maps[5].phy_id = -1;
-	if (!variant || strcmp(variant, "2p5g"))
-		return 0;
 
 	/* Original PORT_REMAPPING is 4,2,1,0; port3 has no external jack. */
 	priv->maps[3].phy_id = -1;
 	priv->maps[4].phy_id = 7;
+	priv->maps[5].phy_id = -1;
 	priv->maps[4].sds_mode = AAL_SDS_MODE_SGMII;
 	/* Preserve the MDC divider, but explicitly select software MDIO control. */
 	setbits_le32(0xf4329118, BIT(0));

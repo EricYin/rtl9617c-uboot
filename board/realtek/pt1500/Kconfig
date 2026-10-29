@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0+
-if TARGET_PT1500
+if TARGET_PT1500_H10_2P5G
 config SYS_BOARD
 	default "pt1500"
 config SYS_VENDOR

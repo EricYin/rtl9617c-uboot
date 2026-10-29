@@ -2065,8 +2065,9 @@ F:	arch/arm/mach-taurus/
 F:	arch/arm/include/asm/arch-taurus/
 F:	arch/arm/dts/rtl9617c*
 F:	board/realtek/
-F:	configs/tyfza1_defconfig
-F:	configs/pt1500_defconfig
+F:	configs/tyfza1-2p5g_defconfig
+F:	configs/tyfza1-4ge_defconfig
+F:	configs/pt1500-h10-2p5g_defconfig
 F:	drivers/mtd/nand/raw/cortina_spi_nand/
 F:	drivers/net/taurus_ni*
 F:	drivers/net/phy/rtl8221b*

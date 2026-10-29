@@ -95,7 +95,6 @@ static void rtk_bootargs(void)
 int rtk_boot_system(void)
 {
 	const struct rtk_recovery_layout *l = rtk_recovery_layout();
-	const struct rtk_board_variant *variant = rtk_board_variant();
 	ulong address = env_get_ulong("unzip_src", 16, CONFIG_SYS_LOAD_ADDR);
 	size_t total;
 
@@ -123,8 +122,6 @@ int rtk_boot_system(void)
 
 	env_set_hex("unzip_src", address);
 	rtk_bootargs();
-	if (variant && variant->fit_config)
-		return run_commandf("bootm 0x%lx#%s", address, variant->fit_config);
 
 	return run_commandf("bootm 0x%lx", address);
 }

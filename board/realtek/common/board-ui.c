@@ -8,7 +8,6 @@
  * they are wired, and the board says that once in struct rtk_board_desc.
  */
 #include <config.h>
-#include <env.h>
 #include <time.h>
 #include <string.h>
 #include <cortina_nand.h>
@@ -20,7 +19,6 @@
 #include <linux/kernel.h>
 
 static struct taurus_gpio_group lamps;
-static const struct rtk_board_variant *lamps_variant;
 static u32 lamp_bits[RTK_BOARD_LAMPS];
 static bool lamp_inverted[RTK_BOARD_LAMPS];
 static enum rtk_led_state lamp_state;
@@ -28,33 +26,6 @@ static ulong lamp_since;
 static size_t lamp_done, lamp_total;
 static u32 lamp_lit;
 
-const struct rtk_board_variant *rtk_board_variant(void)
-{
-	const struct rtk_board_desc *desc = rtk_board_desc();
-	const char *name;
-	unsigned int i;
-
-	if (!desc || !desc->variants || !desc->nr_variants)
-		return NULL;
-	if (!desc->variant_env)
-		return &desc->variants[0];
-
-	name = env_get(desc->variant_env);
-	if (!name)
-		return NULL;
-	for (i = 0; i < desc->nr_variants; i++)
-		if (desc->variants[i].name &&
-		    !strcmp(name, desc->variants[i].name))
-			return &desc->variants[i];
-
-	return NULL;
-}
-
-/*
- * Resolve the lamp pins of this unit. Called on every transition out of the
- * off state, because the variant comes from the environment and may have been
- * corrected after the first call.
- */
 static void lamp_hw_release(void)
 {
 	writel(0, GLOBAL_LED_CONTROL);
@@ -67,7 +38,7 @@ static void lamp_hw_release(void)
 
 static int lamp_select(void)
 {
-	const struct rtk_board_variant *variant = rtk_board_variant();
+	const struct rtk_board_variant *variant = rtk_board_desc()->variant;
 	unsigned int pins[RTK_BOARD_LAMPS];
 	unsigned int i;
 
@@ -82,7 +53,6 @@ static int lamp_select(void)
 		return -1;
 	for (i = 0; i < RTK_BOARD_LAMPS; i++)
 		lamp_bits[i] = BIT(pins[i] % TAURUS_GPIO_BANK_PINS);
-	lamps_variant = variant;
 	lamp_lit = 0;
 
 	return 0;

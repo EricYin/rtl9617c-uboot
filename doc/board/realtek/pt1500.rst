@@ -29,7 +29,7 @@ Building
 .. code-block:: bash
 
    export CROSS_COMPILE=aarch64-linux-gnu-
-   make pt1500_defconfig
+   make pt1500-h10-2p5g_defconfig
    make
 
 This produces ``u-boot.bin`` (``u-boot-nodtb.bin`` with the device tree
@@ -72,17 +72,16 @@ hardware: the recovery network defaults and the load address. The boot policy -
 ``rtk_board_env_init()`` in code, identically on every board, so an erased or
 unreadable environment cannot change how the board boots.
 
-The environment is stored once, at 0x200000, without a redundant copy.
+The environment is stored redundantly, at 0x280000 and 0x2c0000.
 
 Boot flow
 ---------
 
-``bootcmd`` is ``bootmenu 3`` on every board, with the same two entries:
+``bootcmd`` is ``rtk_boot`` on every board; the boot menu offers the same two entries:
 
-* ``Start OpenWrt`` runs ``rtk_boot``: attach UBI, read ``ubi_k<slot>`` for the
-  slot named by the ``slot`` variable (default 0), set ``bootargs`` from the
-  layout and boot the FIT configuration the board descriptor names for this
-  unit's variant.
+* ``Start OpenWrt`` runs ``rtk_boot``: attach UBI, read the ``fit`` volume,
+  set ``bootargs`` from the layout and boot the FIT (the configuration named
+  by the image's own ``default`` property).
 * ``Web recovery`` runs ``rtk_recovery``.
 
 Holding the reset key at power on starts the recovery instead, and a key pressed
@@ -117,13 +116,13 @@ Source layout
 The board is one of three layers; see :doc:`porting` for the split. Everything
 this port adds lives in:
 
-* ``arch/arm/dts/rtl9617c-pt1500.dts`` - board nodes: reset key, flash
+* ``arch/arm/dts/rtl9617c-pt1500-h10-2p5g.dts`` - board nodes: reset key, flash
   partitions, recovery layout
 * ``board/realtek/pt1500/board.c`` - DRAM banks and init; nothing else
-* ``board/realtek/pt1500/desc.c`` - lamps, key and FIT configuration
+* ``board/realtek/pt1500/desc.c`` - lamps and key
 * ``board/realtek/pt1500/layout.c`` - volume table and kernel command line
 * ``board/realtek/pt1500/pt1500.env`` - default environment
-* ``configs/pt1500_defconfig``, ``include/configs/pt1500.h``
+* ``configs/pt1500-h10-2p5g_defconfig``, ``include/configs/pt1500.h``
 
 Everything else is shared: ``arch/arm/mach-taurus/``, ``drivers/`` and
 ``board/realtek/common/``.

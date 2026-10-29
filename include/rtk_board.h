@@ -22,23 +22,18 @@ struct rtk_led {
 #define RTK_BOARD_LAMPS	5
 
 /*
- * A hardware variant of one board. Boards with a single build pass NULL as the
- * variant env and only the first entry; boards that read a strap expose the
- * value through the environment and list one entry per variant.
+ * The lamp wiring and the strings the recovery page shows, fixed per image:
+ * every variant is its own build.
  */
 struct rtk_board_variant {
-	const char *name;			/* value of the variant env */
 	struct rtk_led lamp[RTK_BOARD_LAMPS];
 	const char *ports;			/* shown by the recovery page */
-	const char *fit_config;		/* FIT configuration to boot */
 };
 
 struct rtk_board_desc {
 	const char *name;			/* "TYFZA1", "PT1500" */
 	const char *version;			/* port release, shown by the UI */
-	const char *variant_env;		/* NULL: single variant board */
-	const struct rtk_board_variant *variants;
-	unsigned int nr_variants;
+	const struct rtk_board_variant *variant;
 	int reset_pin;				/* global pin, -1 when absent */
 	bool reset_active_low;
 };
@@ -56,9 +51,6 @@ enum rtk_led_state {
 	RTK_LEDS_DONE,		/* write succeeded: all on for two seconds */
 	RTK_LEDS_FAILED,	/* write failed: lamps 1+3 and 2+4 alternate */
 };
-
-/* Variant of the board this unit is, or NULL when it cannot be determined. */
-const struct rtk_board_variant *rtk_board_variant(void);
 
 /* Board lifecycle shared by every board of this platform. */
 void rtk_board_reset_latch(void);

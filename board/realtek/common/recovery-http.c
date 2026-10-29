@@ -64,7 +64,7 @@ static void rtk_http_poll(void)
 static void rtk_http_info(struct http_json *json)
 {
 	const struct rtk_board_desc *desc = rtk_board_desc();
-	const struct rtk_board_variant *variant = rtk_board_variant();
+	const struct rtk_board_variant *variant = desc ? desc->variant : NULL;
 
 	if (!desc)
 		return;
@@ -193,7 +193,6 @@ static int rtk_http_install_loader(ulong address, size_t size, bool bl2,
 /* Boot an image straight out of RAM, without touching Flash. */
 static int rtk_http_boot_upload(ulong address, size_t size)
 {
-	const struct rtk_board_variant *variant = rtk_board_variant();
 	size_t total = rtk_fit_image_size((const void *)address);
 
 	if (!total || total > size) {
@@ -201,8 +200,6 @@ static int rtk_http_boot_upload(ulong address, size_t size)
 		return -EINVAL;
 	}
 	env_set_hex("unzip_src", address);
-	if (variant && variant->fit_config)
-		return run_commandf("bootm 0x%lx#%s", address, variant->fit_config);
 
 	return run_commandf("bootm 0x%lx", address);
 }

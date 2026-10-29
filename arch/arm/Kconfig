@@ -2187,8 +2187,8 @@ config TARGET_PRESIDIO_ASIC
 	select ARM64
 	select GICV2
 
-config TARGET_TYFZA1
-	bool "Tianyi TYFZA1 (RTL9617CVW)"
+config TARGET_TYFZA1_2P5G
+	bool "Tianyi TYFZA1 2.5G (RTL9617CVW)"
 	select ARM64
 	select DM
 	select OF_CONTROL
@@ -2197,8 +2197,18 @@ config TARGET_TYFZA1
 	select SOC_RTL9617C
 	select RTK_RECOVERY
 
-config TARGET_PT1500
-	bool "Youhua PT1500-H10 (RTL9617C)"
+config TARGET_TYFZA1_4GE
+	bool "Tianyi TYFZA1 4GE (RTL9617CVW)"
+	select ARM64
+	select DM
+	select OF_CONTROL
+	select BOARD_LATE_INIT
+	select EVENT
+	select SOC_RTL9617C
+	select RTK_RECOVERY
+
+config TARGET_PT1500_H10_2P5G
+	bool "Youhua PT1500-H10 2.5G (RTL9617C)"
 	select ARM64
 	select DM
 	select OF_CONTROL
